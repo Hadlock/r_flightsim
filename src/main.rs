@@ -29,11 +29,12 @@ pub mod game_colors {
 }
 
 fn window() {
-
+    let screen_width=600 as f64;
+    let screen_height=480 as f64;
 
     // splice in piston window here
     let mut window: PistonWindow = 
-        WindowSettings::new("r_flightsim", [960, 700])
+        WindowSettings::new("r_flightsim", [screen_width, screen_height])
         .exit_on_esc(true).build().unwrap();
 
     // button handle boilerplate
@@ -77,8 +78,31 @@ fn window() {
 
         window.draw_2d(&e, |c, g, _device| {
             clear([0.0; 4], g);
-            line(game_colors::WHITE, 0.5, [0.0, 0.0, 200.0, 200.0], c.transform, g);
-            line(game_colors::WHITE, 0.5, [0.0 + hdg as f64, 200.0 + alt as f64, 200.0 + hdg as f64, 200.0 + alt as f64], c.transform, g);
+
+            // crosshairs
+            line(game_colors::WHITE, 
+                0.5, 
+                    [
+                        screen_width/2.0-5.0 as f64,
+                        screen_height/2.0 as f64,
+                        screen_width/2.0+5.0 as f64,
+                        screen_height/2.0 as f64
+                        ],
+                c.transform, g);
+
+            line(game_colors::WHITE, 
+                0.5, 
+                    [
+                        screen_width/2.0 as f64,
+                        screen_height/2.0-5.0 as f64,
+                        screen_width/2.0 as f64,
+                        screen_height/2.0+5 as f64
+                        ],
+                c.transform, g);
+
+
+            // things that move
+            line(game_colors::WHITE, 0.5, [100.0 + hdg as f64, 350.0 + alt as f64, 300.0 + hdg as f64, 350.0 + alt as f64], c.transform, g);
         });
     }
 }
@@ -88,7 +112,7 @@ fn main() {
     
     // clap cli arguments
     let _matches = App::new("r_flightsim")
-    .version("0.1")
+    .version("0.1.0")
     .author("Chad Hedstrom")
     .about("Flightsim written in rust")
     .arg(Arg::with_name("verbose")
