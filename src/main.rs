@@ -34,6 +34,10 @@ pub mod game_colors {
     pub const GREEN: [f32; 4 ] = [0.0,0.5,0.0,1.0];
 }
 
+fn mline() {
+
+}
+
 fn window() {
 
 
@@ -46,16 +50,39 @@ fn window() {
     let mut touch_visualizer = TouchVisualizer::new();
     let mut events = Events::new(EventSettings::new().lazy(true));
 
+    let mut alt = 0;
+    let mut hdg = 0;
+    println!("alt = {}", alt);
+    println!("hdg = {}", hdg);
+
+
     while let Some(e) = window.next() {
         // button handle loop
         touch_visualizer.event(window.size(), &e);
-
+        
         if let Some(Button::Keyboard(key)) = e.press_args() {
-            if key == Key::G {
-                println!("Retracted landing gear");
+            if key == Key::W {
+                println!("down");
+                alt += 1;
+                println!("alt = {}", alt);
             }
+            if key == Key::S {
+                println!("up");
+                alt -= 1;
+                println!("alt = {}", alt);
+            }
+            if key == Key::A {
+                println!("left/port");
+                hdg -= 1;
+                println!("hdg = {}", hdg);
+            }
+            if key == Key::D {
+                println!("right/stbd");
+                hdg += 1;
+                println!("hdg = {}", hdg);
+            }
+            
         }
-
 
 
         window.draw_2d(&e, |c, g, _device| {
@@ -73,6 +100,10 @@ fn window() {
             line(game_colors::WHITE, 1.0, [320.0 + i as f64 * 15.0, 20.0, 380.0 - i as f64 * 15.0, 80.0],
                       c.transform, g);
             }
+
+            // draws a red pixel of radius 3, from [0, 0] to [15, 15]
+            line(game_colors::WHITE, 0.5, [0.0, 0.0, 200.0, 200.0], c.transform, g);
+            line(game_colors::WHITE, 0.5, [0.0 + hdg as f64, 200.0 + alt as f64, 200.0 + hdg as f64, 200.0 + alt as f64], c.transform, g);
         });
     }
 }
@@ -91,21 +122,8 @@ fn main() {
         .help("verbosity level"))
     .get_matches();
 
-    // ctrl c stuff
-    /*
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-    ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
-    }).expect("Error setting Ctrl-C handler");
-    println!("Waiting for Ctrl-C...");
-    */
+
     println!("---- r_flightsim Start ----");
 
     window();
-
-    /*
-    while running.load(Ordering::SeqCst) {}
-    println!("Got it! Exiting...");
-    */
 }
