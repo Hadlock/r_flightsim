@@ -1,5 +1,4 @@
 // cli
-extern crate ctrlc;
 extern crate clap;
 
 // piston graphics and stuff
@@ -9,13 +8,8 @@ extern crate touch_visualizer;
 // fps counter
 // extern crate fps_counter;
 
-//ctrlc
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-
 // clap
-use std::process;
-use clap::{Arg, ArgMatches, App, SubCommand};
+use clap::{Arg, App};
 
 // piston things
 use piston_window::*;
@@ -34,21 +28,17 @@ pub mod game_colors {
     pub const GREEN: [f32; 4 ] = [0.0,0.5,0.0,1.0];
 }
 
-fn mline() {
-
-}
-
 fn window() {
 
 
     // splice in piston window here
     let mut window: PistonWindow = 
-        WindowSettings::new("r_flightsim", [640, 480])
+        WindowSettings::new("r_flightsim", [960, 700])
         .exit_on_esc(true).build().unwrap();
 
     // button handle boilerplate
     let mut touch_visualizer = TouchVisualizer::new();
-    let mut events = Events::new(EventSettings::new().lazy(true));
+    let _events = Events::new(EventSettings::new().lazy(true));
 
     let mut alt = 0;
     let mut hdg = 0;
@@ -87,21 +77,6 @@ fn window() {
 
         window.draw_2d(&e, |c, g, _device| {
             clear([0.0; 4], g);
-            rectangle(game_colors::RED, // red
-                      [100.0, 100.0, 100.0, 100.0],
-                      c.transform, g);
-            rectangle(game_colors::GREEN, // green
-                      [200.0, 200.0, 100.0, 100.0],
-                      c.transform, g);
-            rectangle(game_colors::BLUE, // green
-                      [300.0, 300.0, 100.0, 100.0],
-                      c.transform, g);
-            for i in 0..5 {
-            line(game_colors::WHITE, 1.0, [320.0 + i as f64 * 15.0, 20.0, 380.0 - i as f64 * 15.0, 80.0],
-                      c.transform, g);
-            }
-
-            // draws a red pixel of radius 3, from [0, 0] to [15, 15]
             line(game_colors::WHITE, 0.5, [0.0, 0.0, 200.0, 200.0], c.transform, g);
             line(game_colors::WHITE, 0.5, [0.0 + hdg as f64, 200.0 + alt as f64, 200.0 + hdg as f64, 200.0 + alt as f64], c.transform, g);
         });
@@ -112,7 +87,7 @@ fn window() {
 fn main() {
     
     // clap cli arguments
-    let matches = App::new("r_flightsim")
+    let _matches = App::new("r_flightsim")
     .version("0.1")
     .author("Chad Hedstrom")
     .about("Flightsim written in rust")
