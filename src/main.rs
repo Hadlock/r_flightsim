@@ -28,9 +28,35 @@ pub mod game_colors {
     pub const GREEN: [f32; 4 ] = [0.0,0.5,0.0,1.0];
 }
 
+// struct + impl = "class"
+struct Position{
+    x: i32,
+    y: i32,
+    z: i32,
+}
+
+impl Default for Position {
+    fn default () -> Position {
+        Position{x: 0, y: 0, z:0}
+    }
+}
+
+/*
+impl Popper for Position{
+    fn popper(&self) {
+        println!("x = {}", self.x);
+ }
+}
+*/
+
+
 fn window() {
+    // screen constants
     let screen_width=600 as f64;
     let screen_height=480 as f64;
+
+    // cam position
+    let mut cam_position = Position::default();
 
     // splice in piston window here
     let mut window: PistonWindow = 
@@ -55,24 +81,22 @@ fn window() {
             if key == Key::W {
                 println!("down");
                 alt += 1;
-                println!("alt = {}", alt);
             }
             if key == Key::S {
                 println!("up");
                 alt -= 1;
-                println!("alt = {}", alt);
             }
             if key == Key::A {
                 println!("left/port");
                 hdg -= 1;
-                println!("hdg = {}", hdg);
             }
             if key == Key::D {
                 println!("right/stbd");
                 hdg += 1;
-                println!("hdg = {}", hdg);
             }
-            
+            // positional stuff
+            println!("alt = {}, hdg = {}", alt, hdg);
+            println!("cam:: x = {}, y = {}, z = {}", cam_position.x, cam_position.y, cam_position.z);
         }
 
 
@@ -99,7 +123,6 @@ fn window() {
                         screen_height/2.0+5 as f64
                         ],
                 c.transform, g);
-
 
             // things that move
             line(game_colors::WHITE, 0.5, [100.0 + hdg as f64, 350.0 + alt as f64, 300.0 + hdg as f64, 350.0 + alt as f64], c.transform, g);
