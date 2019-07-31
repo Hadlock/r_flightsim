@@ -45,6 +45,24 @@ impl Position {
         self.y = b;
         self.z = c;
     }
+    
+    fn relative(&mut self, dx: i32, dy: i32, dz: i32) {
+        /*
+        let mut myrelative = Position::default();
+        myrelative.position(8,7,2);
+        myrelative.relative(2,3,8);
+        println!("{:?}", myrelative);
+        */
+        let k = self.x + dx;
+        let l = self.y + dy;
+        let m = self.z + dz;
+        return Position::position( self, k,l,m);
+    
+    }
+}
+
+fn relative(dx: f64, dy: f64, dz: f64) {
+
 }
 
 struct Wire {
