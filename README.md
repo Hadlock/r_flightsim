@@ -15,4 +15,9 @@ Dev build:
 Release build:
 
 `cargo build --release`
-then, `strip ./r_flightsim/target/release/r_flightsim`
+then, `strip target/release/r_flightsim`
+
+```shell
+ls -lh target/release/r_flightsim
+-rwxrwxr-x 2 hadlock hadlock 2.0M Jul 30 20:20 target/release/r_flightsim*
+```

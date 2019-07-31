@@ -28,32 +28,45 @@ pub mod game_colors {
     pub const GREEN: [f32; 4 ] = [0.0,0.5,0.0,1.0];
 }
 
-// struct + impl = "class"
-struct Position{
+// camera position
+#[derive(Debug, Default)]
+struct Position {
     x: i32,
     y: i32,
     z: i32,
 }
 
-impl Default for Position {
-    fn default () -> Position {
-        Position{x: 0, y: 0, z:0}
+impl Position {
+    fn up(&mut self) {
+        self.y += 1;
+    }
+    fn position(&mut self, a: i32, b: i32, c: i32) {
+        self.x = a;
+        self.y = b;
+        self.z = c;
     }
 }
 
-/*
-impl Popper for Position{
-    fn popper(&self) {
-        println!("x = {}", self.x);
- }
+struct Wire {
+    start: Position,
+    end: Position,
 }
-*/
 
+impl Wire {
+    fn wire(&mut self, s: Position, e: Position) {
+        self.start = s;
+        self.end = e;
+    }
+
+}
 
 fn window() {
     // screen constants
     let screen_width=600 as f64;
     let screen_height=480 as f64;
+    
+    // camera direction
+    let mut direction = 0;
 
     // cam position
     let mut cam_position = Position::default();
@@ -69,9 +82,6 @@ fn window() {
 
     let mut alt = 0;
     let mut hdg = 0;
-    println!("alt = {}", alt);
-    println!("hdg = {}", hdg);
-
 
     while let Some(e) = window.next() {
         // button handle loop
@@ -89,13 +99,16 @@ fn window() {
             if key == Key::A {
                 println!("left/port");
                 hdg -= 1;
+                cam_position.x -= 1;
             }
             if key == Key::D {
                 println!("right/stbd");
                 hdg += 1;
+                cam_position.x += 1;
             }
             // positional stuff
             println!("alt = {}, hdg = {}", alt, hdg);
+            cam_position.position(8,7,2);
             println!("cam:: x = {}, y = {}, z = {}", cam_position.x, cam_position.y, cam_position.z);
         }
 
