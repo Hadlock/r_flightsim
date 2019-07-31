@@ -6,6 +6,9 @@ extern crate clap;
 extern crate piston_window;
 extern crate touch_visualizer;
 
+// fps counter
+// extern crate fps_counter;
+
 //ctrlc
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -56,7 +59,7 @@ fn window() {
 
 
         window.draw_2d(&e, |c, g, _device| {
-            clear([1.0; 4], g);
+            clear([0.0; 4], g);
             rectangle(game_colors::RED, // red
                       [100.0, 100.0, 100.0, 100.0],
                       c.transform, g);
@@ -66,6 +69,10 @@ fn window() {
             rectangle(game_colors::BLUE, // green
                       [300.0, 300.0, 100.0, 100.0],
                       c.transform, g);
+            for i in 0..5 {
+            line(game_colors::WHITE, 1.0, [320.0 + i as f64 * 15.0, 20.0, 380.0 - i as f64 * 15.0, 80.0],
+                      c.transform, g);
+            }
         });
     }
 }
