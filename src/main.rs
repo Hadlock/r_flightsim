@@ -15,6 +15,9 @@ use clap::{Arg, App};
 use piston_window::*;
 use touch_visualizer::TouchVisualizer;
 
+// camera FOV
+static FOV: f64 = std::f64::consts::FRAC_PI_2;
+
 /// Contains colors that can be used in the game
 pub mod game_colors {
     pub const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
@@ -45,24 +48,12 @@ impl Position {
         self.y = b;
         self.z = c;
     }
-    
-    fn relative(&mut self, dx: i32, dy: i32, dz: i32) {
-        /*
-        let mut myrelative = Position::default();
-        myrelative.position(8,7,2);
-        myrelative.relative(2,3,8);
-        println!("{:?}", myrelative);
-        */
-        let k = self.x + dx;
-        let l = self.y + dy;
-        let m = self.z + dz;
-        return Position::position( self, k,l,m);
-    
+
+    fn relative(c: Position, d: Position) -> Position {
+        // finds relative position between two points
+        // returns new position struct
+        return Position { x:  c.x + d.x, y: c.y + d.y, z: c.z + d.z }
     }
-}
-
-fn relative(dx: f64, dy: f64, dz: f64) {
-
 }
 
 struct Wire {
@@ -177,6 +168,6 @@ fn main() {
 
 
     println!("---- r_flightsim Start ----");
-
+    println!("This is fov {}", FOV);
     window();
 }
