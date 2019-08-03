@@ -34,16 +34,16 @@ pub mod game_colors {
 // camera position
 #[derive(Debug, Default)]
 struct Position {
-    x: i32,
-    y: i32,
-    z: i32,
+    x: f32,
+    y: f32,
+    z: f32,
 }
 
 impl Position {
     fn up(&mut self) {
-        self.y += 1;
+        self.y += 1.0;
     }
-    fn position(&mut self, a: i32, b: i32, c: i32) {
+    fn position(&mut self, a: f32, b: f32, c: f32) {
         self.x = a;
         self.y = b;
         self.z = c;
@@ -108,16 +108,16 @@ fn window() {
             if key == Key::A {
                 println!("left/port");
                 hdg -= 1;
-                cam_position.x -= 1;
+                cam_position.x -= 1.0;
             }
             if key == Key::D {
                 println!("right/stbd");
                 hdg += 1;
-                cam_position.x += 1;
+                cam_position.x += 1.0;
             }
             // positional stuff
             println!("alt = {}, hdg = {}", alt, hdg);
-            cam_position.position(8,7,2);
+            cam_position.position(8.0,7.0,2.0);
             println!("cam:: x = {}, y = {}, z = {}", cam_position.x, cam_position.y, cam_position.z);
         }
 
