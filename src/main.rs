@@ -17,6 +17,9 @@ use touch_visualizer::TouchVisualizer;
 
 // camera FOV
 static FOV: f64 = std::f64::consts::FRAC_PI_2;
+// screen constants
+static SCREEN_WIDTH: f64 = 600.0;
+static SCREEN_HEIGHT:  f64 = 480.0;
 
 /// Contains colors that can be used in the game
 pub mod game_colors {
@@ -34,16 +37,16 @@ pub mod game_colors {
 // camera position
 #[derive(Debug, Default)]
 struct Position {
-    x: f32,
-    y: f32,
-    z: f32,
+    x: f64,
+    y: f64,
+    z: f64,
 }
 
 impl Position {
     fn up(&mut self) {
         self.y += 1.0;
     }
-    fn position(&mut self, a: f32, b: f32, c: f32) {
+    fn position(&mut self, a: f64, b: f64, c: f64) {
         self.x = a;
         self.y = b;
         self.z = c;
@@ -60,7 +63,6 @@ struct Wire {
     start: Position,
     end: Position,
 }
-
 impl Wire {
     fn wire(&mut self, s: Position, e: Position) {
         self.start = s;
@@ -69,11 +71,31 @@ impl Wire {
 
 }
 
+struct Cube {
+    wires: [u8; 12],
+}
+
+impl Default for Cube {
+    fn default() -> Cube {
+        Cube {
+            wires: [0; 12],
+        }
+    }
+}
+
+// Projects point onto camera "canvas"
+fn point_on_canvas(pos: Position) -> Position {
+    let mut angle_h = pos.y.atan2(pos.x) as f64;
+    let mut angle_v = pos.z.atan2(pos.x) as f64;
+
+    angle_h /= (angle_h.cos()).abs();
+    angle_v /= (angle_v.cos()).abs();
+
+    return Position { x: (SCREEN_WIDTH / 2.0 - angle_h * SCREEN_WIDTH / FOV) , y: (SCREEN_HEIGHT/2.0 - angle_v * SCREEN_WIDTH / FOV) , z: 0.0 }
+}
+
+
 fn window() {
-    // screen constants
-    let screen_width=600 as f64;
-    let screen_height=480 as f64;
-    
     // camera direction
     let mut direction = 0;
 
@@ -82,7 +104,7 @@ fn window() {
 
     // splice in piston window here
     let mut window: PistonWindow = 
-        WindowSettings::new("r_flightsim", [screen_width, screen_height])
+        WindowSettings::new("r_flightsim", [SCREEN_WIDTH, SCREEN_HEIGHT])
         .exit_on_esc(true).build().unwrap();
 
     // button handle boilerplate
@@ -129,20 +151,20 @@ fn window() {
             line(game_colors::WHITE, 
                 0.5, 
                     [
-                        screen_width/2.0-5.0 as f64,
-                        screen_height/2.0 as f64,
-                        screen_width/2.0+5.0 as f64,
-                        screen_height/2.0 as f64
+                        SCREEN_WIDTH/2.0-5.0 as f64,
+                        SCREEN_HEIGHT/2.0 as f64,
+                        SCREEN_WIDTH/2.0+5.0 as f64,
+                        SCREEN_HEIGHT/2.0 as f64
                         ],
                 c.transform, g);
 
             line(game_colors::WHITE, 
                 0.5, 
                     [
-                        screen_width/2.0 as f64,
-                        screen_height/2.0-5.0 as f64,
-                        screen_width/2.0 as f64,
-                        screen_height/2.0+5 as f64
+                        SCREEN_WIDTH/2.0 as f64,
+                        SCREEN_HEIGHT/2.0-5.0 as f64,
+                        SCREEN_WIDTH/2.0 as f64,
+                        SCREEN_HEIGHT/2.0+5 as f64
                         ],
                 c.transform, g);
 
