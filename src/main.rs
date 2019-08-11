@@ -35,7 +35,7 @@ pub mod game_colors {
 }
 
 // camera position
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Copy, Clone)]
 struct Position {
     x: f64,
     y: f64,
@@ -68,36 +68,40 @@ const CAMPOSITION: Position = Position {
     z: 0.0,
 };
 
+#[derive(Debug, Copy, Clone)]
 struct Wire {
     start: Position,
     end: Position,
 }
+
 impl Wire {
     fn wire(&mut self, s: Position, e: Position) {
         self.start = s;
         self.end = e;
     }
+}
 
+impl Default for Wire {
+    fn default() -> Wire {
+        Wire {
+            start: Position::default(),
+            end:   Position::default(),
+        }
+    }
 }
 
 struct Cube {
-    wires: [u8; 12],
+    wires: [Wire; 12],
 }
 
 impl Default for Cube {
     fn default() -> Cube {
         Cube {
-            wires: [0; 12],
+            wires: [Wire::default(); 12],
         }
     }
-    /*
-    fn cube() -> Cube {
-        Cube{
-            wires[0] = Wire
-        }
-    }
-    */
 }
+
 
 // Projects point onto camera "canvas"
 fn point_on_canvas(pos: Position) -> Position {
@@ -217,48 +221,31 @@ fn window() {
                         ], 
                         c.transform, 
                         g);
-            /*
-            // draw moving things:
-            let c = cube.wires.length
-            for i in 0..c {
+
+            // instantiate cube
+            let cube = Cube::default();
+
+            for i in 0..cube.wires.len() {
 
                 //wires end and start positions transformed to camera coordinates
-                let camPosStart = toCamCoords(cube.wires[i].start);
-                let camPosEnd = toCamCoords(cube.wires[i].end);
+                let cam_pos_start = to_cam_coords(cube.wires[i].start);
+                let cam_pos_end = to_cam_coords(cube.wires[i].end);
                 
                 //projection of start and endpoints to camera
-                let drawStart = pointOnCanvas(camPosStart);
-                let drawEnd = pointOnCanvas(camPosEnd);
+                let draw_start = point_on_canvas(cam_pos_start);
+                let draw_end = point_on_canvas(cam_pos_end);
                 
                 //drawing lines on screen
                 line(game_colors::WHITE, 0.5, 
                     [
-                        drawStart.x as f64, 
-                        drawStart.y as f64, 
-                        drawEnd.x as f64, 
-                        drawEnd.y as f64
+                        draw_start.x as f64, 
+                        draw_start.y as f64, 
+                        draw_end.x as f64, 
+                        draw_end.y as f64
                         ], 
                         c.transform, 
                         g);
             }
-            */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         });
     }
 }
@@ -279,6 +266,5 @@ fn main() {
 
 
     println!("---- r_flightsim Start ----");
-    println!("This is fov {}", FOV);
     window();
 }
