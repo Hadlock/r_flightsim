@@ -1,31 +1,31 @@
 [package]
-name = "geom"
+name = "r_flightsim"
 version = "0.1.0"
 authors = ["Chad Hedstrom <chad.hedstrom@gmail.com>"]
 edition = "2018"
 
 [profile.dev]
 # suggested by ggez to improve dev performance
+# "optimize for speed" levels:
 #opt-level = 1
+#opt-level = 2
+#opt-level = 3
 
 [profile.release]
 # shrink release binary down to ~3MB
 # e.g. cargo build --release
 # then, strip ./RGraph/target/release/RGraph
+#opt-level = 1
 lto = true
 panic = 'abort'
 
 [dependencies]
 ggez = "0.5.1"
 
-
 # gui crap
-
 gfx_core = "0.9"
 gfx_device_gl = "0.16"
-
 image = "0.21"
-
 imgui = "0.1.0"
 imgui-gfx-renderer = "0.1.0"
 

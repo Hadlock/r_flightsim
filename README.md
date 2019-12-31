@@ -6,7 +6,7 @@ An basic wireframe flight simulator in rust, using the piston 2D graphics librar
 
 ## Build
 
-Dev builds are giant, clocking in at over 68MB. Release builds can be under 5MB.
+Dev builds are giant, clocking in at over 100MB. Release builds can be under 5MB.
 
 Dev build:
 
@@ -19,5 +19,5 @@ then, `strip target/release/r_flightsim`
 
 ```shell
 ls -lh target/release/r_flightsim
--rwxrwxr-x 2 hadlock hadlock 2.0M Jul 30 20:20 target/release/r_flightsim*
+-rwxrwxr-x   2 hadlock hadlock 4.2M Dec 31 02:52 r_flightsim*
 ```
