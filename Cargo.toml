@@ -1,21 +1,12 @@
 [package]
-name = "r_flightsim"
+name = "geom"
 version = "0.1.0"
 authors = ["Chad Hedstrom <chad.hedstrom@gmail.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-# some boilerplate CLI stuff
-clap = "2.33.0"
-
-# actual 2D engine stuff
-piston_window = "0.101.0"
-piston2d-touch_visualizer = "0.22.0"
-
-# an fps counter, not critical
-# fps_counter = "1.0.0"
+[profile.dev]
+# suggested by ggez to improve dev performance
+#opt-level = 1
 
 [profile.release]
 # shrink release binary down to ~3MB
@@ -23,3 +14,20 @@ piston2d-touch_visualizer = "0.22.0"
 # then, strip ./RGraph/target/release/RGraph
 lto = true
 panic = 'abort'
+
+[dependencies]
+ggez = "0.5.1"
+
+
+# gui crap
+
+gfx_core = "0.9"
+gfx_device_gl = "0.16"
+
+image = "0.21"
+
+imgui = "0.1.0"
+imgui-gfx-renderer = "0.1.0"
+
+# some boilerplate CLI stuff
+clap = "2.33.0"
