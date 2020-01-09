@@ -98,6 +98,43 @@ impl EventHandler for MainState {
     //graphics::clear(ctx, [0.1, 0.2, 0.3, 1.0].into());
     gui::graph(ctx);
 
+    // BEGIN ACTUAL DRAW ////////////////////
+
+    // lets draw some crosshairs
+
+    {
+      // crosshair vertical line
+      let (origin, dest) = (na::Point2::new(300.0, 200.0), na::Point2::new(300.0, 280.0));
+      let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
+      graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
+    }
+
+    {
+      // crosshair horizontal line
+      let (origin, dest) = (na::Point2::new(260.0, 240.0), na::Point2::new(340.0, 240.0));
+      let lineb = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
+      graphics::draw(ctx, &lineb, (na::Point2::new(0.0, 0.0),))?;
+    }
+
+    {
+      // generic line
+      let (origin, dest) = (na::Point2::new(30.0, 30.0), na::Point2::new(100.0, 100.0));
+      let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
+      graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
+    }
+
+    {
+      //generic rectangle
+      let rectangle = graphics::Mesh::new_rectangle(
+        ctx,
+        graphics::DrawMode::fill(),
+        [0.0, 0.0, 30.0, 30.0].into(),
+        graphics::WHITE,
+    )?;
+    graphics::draw(ctx, &rectangle, (na::Point2::new(0.0, 0.0),))?;
+    }
+
+
     // Create a circle at `position_x` and draw
 
     {
@@ -113,6 +150,8 @@ impl EventHandler for MainState {
 
       graphics::draw(ctx, &circle, graphics::DrawParam::default())?;
     }
+
+    // END ACTUAL DRAW ////////////////////////
 
     // draw GUI things
     {
