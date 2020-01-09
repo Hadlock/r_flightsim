@@ -100,7 +100,24 @@ impl EventHandler for MainState {
 
     // BEGIN ACTUAL DRAW ////////////////////
 
+
+
     // lets draw some crosshairs
+
+    {
+      let cube = cube::cube_funtimes();
+
+      for i in 0..cube.wires.len() {
+
+             // crosshair vertical line
+      let (origin, dest) = (na::Point2::new(307.0, 207.0), na::Point2::new(309.0, 289.0));
+      let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
+      graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
+              }
+      }
+
+
+
 
     {
       // crosshair vertical line
@@ -250,7 +267,7 @@ pub fn main() -> GameResult {
 
     // just chad things
 
-    cube::cube_funtimes();
+    // cube::cube_funtimes();
 
     // gui boilerplate
 
