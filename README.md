@@ -4,7 +4,14 @@
 
 An basic wireframe flight simulator in rust, using the piston 2D graphics library
 
-## Build
+## Build Requirements
+
+On Ubuntu 18.04 LTS you'll need these packages to build:
+
+- `sudo apt install gcc`
+- `sudo apt install libasound2-dev libudev-dev pkg-config`
+
+## Build Improvements
 
 Dev builds are giant, clocking in at over 100MB. Release builds can be under 5MB.
 
