@@ -275,7 +275,31 @@ pub fn point_on_canvas(pos: cube::Position) -> na::Point2<f32> {
   let newx = (consts::SCREEN_WIDTH / 2.0 - angle_h * consts::SCREEN_WIDTH / consts::FOV) as f32;
   let newy = (consts::SCREEN_HEIGHT/2.0 - angle_v * consts::SCREEN_WIDTH / consts::FOV) as f32;
   return na::Point2::new(newx, newy)
-  }
+}
+
+pub fn to_cam_coords(pos: cube::Position) -> cube::Position {
+  let r_pos = cube::Position{x: 0.0, y: -2.0, z: 0.0};
+
+  // TODO: lines 286-299 need to be refactored as rust to work
+
+  /*
+  //calculating rotation
+  let rx = r_pos.x as f32;
+  let ry = r_pos.y as f32;
+  let rz = r_pos.z as f32;
+
+  //rotation z-axis
+  rPos.x=rx*cos(-direction)-ry*sin(-direction);
+  rPos.y=rx*sin(-direction)+ry*cos(-direction);
+
+  //rotation y-axis
+  rx=rPos.x;
+  rz=rPos.z;
+  rPos.x=rx*cos(-rotationY)+rz*sin(-rotationY);
+  rPos.z=rz*cos(-rotationY)-rx*sin(-rotationY);
+  */
+  return r_pos;
+}
 
 pub fn main() -> GameResult {
 
