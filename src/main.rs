@@ -102,9 +102,10 @@ impl EventHandler for MainState {
 
 
 
-    // lets draw some crosshairs
+    // first attempt at a cube, delete me
 
     {
+      /*
       let cube = cube::cube_funtimes();
 
       for i in 0..cube.wires.len() {
@@ -112,9 +113,10 @@ impl EventHandler for MainState {
              // crosshair vertical line
       let (origin, dest) = (na::Point2::new(307.0, 207.0), na::Point2::new(309.0, 289.0));
       let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
-      //graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
+      graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
               }
-      }
+      */
+    }
 
     //
     
@@ -137,16 +139,55 @@ impl EventHandler for MainState {
 
 
     }
+    
+    // ok lets draw a cube
+    {
+      let cube = cube::cube_funtimes();
 
+      for i in 0..cube.wires.len() {
+
+        // pretty ugly that I'm multipling by 10
+        let startx = cube.wires[i].start.x * 10 as f32;
+        let starty = cube.wires[i].start.y * 10 as f32;
+        let mut endx = cube.wires[i].end.x * 10 as f32;
+        let endy = cube.wires[i].end.y * 10 as f32;
+
+        if startx == endx {
+          // ggez freaks out if the line has zero length
+          if starty == endy {
+            println!("collison found");
+            endx = endx + 0.1;
+          }
+        }
+        
+        println!("Start X: {:?}", startx);
+        println!("Start Y: {:?}", starty);
+        println!("End X: {:?}", endx);
+        println!("End Y: {:?}", endy);
+
+
+        // draw a wire
+        //let (origin, dest) = (na::Point2::new(startx, cube.wires[i].start.y), na::Point2::new(cube.wires[i].end.x, cube.wires[i].end.y));      
+        let (origin, dest) = (na::Point2::new(startx, starty), na::Point2::new(endx, endy));
+        
+        let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
+        graphics::draw(ctx, &line, (na::Point2::new(200.0, 200.0),))?;
+        }
+      }
+
+    
+    //
     {
       //generic rectangle
+      /*
       let rectangle = graphics::Mesh::new_rectangle(
         ctx,
         graphics::DrawMode::fill(),
         [0.0, 0.0, 30.0, 30.0].into(),
         graphics::WHITE,
-    )?;
-    graphics::draw(ctx, &rectangle, (na::Point2::new(0.0, 0.0),))?;
+        )?;
+      graphics::draw(ctx, &rectangle, (na::Point2::new(0.0, 0.0),))?;
+      */
     }
 
 
@@ -244,7 +285,17 @@ impl EventHandler for MainState {
     // end listen for control events
   }
 
+  pub fn point_on_canvas(pos: cube::Position) -> cube::Position {
+    let mut angle_h = pos.y.atan2(pos.x) as f32;
+    let mut angle_v = pos.z.atan2(pos.x) as f32;
 
+    angle_h /= (angle_h.cos()).abs();
+    angle_v /= (angle_v.cos()).abs();
+
+    return cube::Position { x: (consts::SCREEN_WIDTH / 2.0 - angle_h * consts::SCREEN_WIDTH / consts::FOV) ,
+                      y: (consts::SCREEN_HEIGHT/2.0 - angle_v * consts::SCREEN_WIDTH / consts::FOV) ,
+                      z: 0.0 }
+}
 
 
 pub fn main() -> GameResult {

@@ -2,8 +2,8 @@
 
 // Projects point onto camera "canvas"
 pub fn point_on_canvas(pos: Position) -> Position {
-    let mut angle_h = pos.y.atan2(pos.x) as f64;
-    let mut angle_v = pos.z.atan2(pos.x) as f64;
+    let mut angle_h = pos.y.atan2(pos.x) as f32;
+    let mut angle_v = pos.z.atan2(pos.x) as f32;
 
     angle_h /= (angle_h.cos()).abs();
     angle_v /= (angle_v.cos()).abs();

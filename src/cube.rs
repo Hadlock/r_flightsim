@@ -1,13 +1,13 @@
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Position {
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
 }
 
 impl Position {
 
-  pub fn relative(&mut self, rx: f64, ry: f64, rz: f64) -> Position {
+  pub fn relative(&mut self, rx: f32, ry: f32, rz: f32) -> Position {
       let a = self.x + rx;
       let b = self.y + ry;
       let c = self.z + rz;
@@ -38,7 +38,7 @@ pub fn cube_funtimes() -> Cube {
   //let zenwire = Wire{..wire_funtimes()};
 
   let mut cubepos = Position{x: 6.0, y: 0.0, z: -2.0};
-  let size: f64 = 2.0;
+  let size: f32 = 2.0;
   //let Wire = cube::Wire;
 
   let cool_cube = Cube{
