@@ -165,10 +165,14 @@ impl EventHandler for MainState {
         println!("End X: {:?}", endx);
         println!("End Y: {:?}", endy);
 
+        let nextk = cube.wires[i].start; //(1.0, 1.0) as na::Point2<f32>
+        let naz = pos_to_napt2(cube.wires[i].start);
+        println!("Next K: {:?}", nextk);
+        println!("Naz Z: {:?}", naz);
 
         // draw a wire
         //let (origin, dest) = (na::Point2::new(startx, cube.wires[i].start.y), na::Point2::new(cube.wires[i].end.x, cube.wires[i].end.y));      
-        let (origin, dest) = (na::Point2::new(startx, starty), na::Point2::new(endx, endy));
+        let (origin, dest) = (na::Point2::new(startx, starty), naz);
         
         let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
         graphics::draw(ctx, &line, (na::Point2::new(200.0, 200.0),))?;
@@ -285,6 +289,7 @@ impl EventHandler for MainState {
     // end listen for control events
   }
 
+// helper function garbage
   pub fn point_on_canvas(pos: cube::Position) -> cube::Position {
     let mut angle_h = pos.y.atan2(pos.x) as f32;
     let mut angle_v = pos.z.atan2(pos.x) as f32;
@@ -297,6 +302,12 @@ impl EventHandler for MainState {
                       z: 0.0 }
 }
 
+pub fn pos_to_napt2(pos: cube::Position) -> na::Point2<f32> {
+  // ba ba ba ran
+  let newx = pos.x as f32;
+  let newy = pos.y as f32;
+  return na::Point2::new(newx, newy)
+  }
 
 pub fn main() -> GameResult {
 
