@@ -112,32 +112,30 @@ impl EventHandler for MainState {
              // crosshair vertical line
       let (origin, dest) = (na::Point2::new(307.0, 207.0), na::Point2::new(309.0, 289.0));
       let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
-      graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
+      //graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
               }
       }
 
-
-
-
+    //
+    
     {
-      // crosshair vertical line
-      let (origin, dest) = (na::Point2::new(300.0, 200.0), na::Point2::new(300.0, 280.0));
+      // attempt at crosshairs
+
+      //  line(screenWidth/2-5, screenHeight/2, [screenWidth/2+5, screenHeight/2);
+      //  line(screenWidth/2, screenHeight/2-5,[screenWidth/2, screenHeight/2+5);
+
+      // consts::SCREEN_WIDTH, consts::SCREEN_HEIGHT
+
+      // horizontal
+      let (origin, dest) = (na::Point2::new(consts::SCREEN_WIDTH/2.0-5.0, consts::SCREEN_HEIGHT/2.0), na::Point2::new(consts::SCREEN_WIDTH/2.0+5.0, consts::SCREEN_HEIGHT/2.0));
       let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
       graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
-    }
-
-    {
-      // crosshair horizontal line
-      let (origin, dest) = (na::Point2::new(260.0, 240.0), na::Point2::new(340.0, 240.0));
-      let lineb = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
-      graphics::draw(ctx, &lineb, (na::Point2::new(0.0, 0.0),))?;
-    }
-
-    {
-      // generic line
-      let (origin, dest) = (na::Point2::new(30.0, 30.0), na::Point2::new(100.0, 100.0));
+      // vertical
+      let (origin, dest) = (na::Point2::new(consts::SCREEN_WIDTH/2.0, consts::SCREEN_HEIGHT/2.0-5.0), na::Point2::new(consts::SCREEN_WIDTH/2.0, consts::SCREEN_HEIGHT/2.0+5.0));
       let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
       graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
+
+
     }
 
     {
