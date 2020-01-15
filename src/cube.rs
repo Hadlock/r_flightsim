@@ -37,7 +37,7 @@ impl Cube {
 pub fn cube_funtimes() -> Cube {
   //let zenwire = Wire{..wire_funtimes()};
 
-  let mut cubepos = Position{x: 6.0, y: 0.0, z: -2.0};
+  let mut cubepos = Position{x: 6.0, y: 0.0, z: -1.5};
   let size: f32 = 2.0;
   //let Wire = cube::Wire;
 

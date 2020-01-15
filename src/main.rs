@@ -142,9 +142,11 @@ impl EventHandler for MainState {
     
     // ok lets draw a cube
     {
-      let cube = cube::cube_funtimes();
+      let mut cube = cube::cube_funtimes();
 
       for i in 0..cube.wires.len() {
+
+        /*
 
         // pretty ugly that I'm multipling by 10
         let startx = cube.wires[i].start.x * 10 as f32;
@@ -167,15 +169,33 @@ impl EventHandler for MainState {
 
         let nextk = cube.wires[i].start; //(1.0, 1.0) as na::Point2<f32>
         let naz = pos_to_napt2(cube.wires[i].start);
-        println!("Next K: {:?}", nextk);
-        println!("Naz Z: {:?}", naz);
+        //println!("Next K: {:?}", nextk);
+        //println!("Naz Z: {:?}", naz);
+
+        */
+
+        if cube.wires[i].start.x == cube.wires[i].end.x {
+          // ggez freaks out if the line has zero length
+          if cube.wires[i].start.y == cube.wires[i].end.y {
+            println!("collison found");
+            cube.wires[i].end.x = cube.wires[i].end.x + 0.001;
+          }
+        }
+
+
+        let nas = pos_to_napt2(cube.wires[i].start);
+        let nae = pos_to_napt2(cube.wires[i].end);
+
+        println!("Nas S: {:?}", nas);
+        println!("Nae E: {:?}", nae);
+
 
         // draw a wire
         //let (origin, dest) = (na::Point2::new(startx, cube.wires[i].start.y), na::Point2::new(cube.wires[i].end.x, cube.wires[i].end.y));      
-        let (origin, dest) = (na::Point2::new(startx, starty), naz);
+        let (origin, dest) = (nas, nae);
         
         let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
-        graphics::draw(ctx, &line, (na::Point2::new(200.0, 200.0),))?;
+        graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
         }
       }
 
@@ -297,15 +317,23 @@ impl EventHandler for MainState {
     angle_h /= (angle_h.cos()).abs();
     angle_v /= (angle_v.cos()).abs();
 
-    return cube::Position { x: (consts::SCREEN_WIDTH / 2.0 - angle_h * consts::SCREEN_WIDTH / consts::FOV) ,
-                      y: (consts::SCREEN_HEIGHT/2.0 - angle_v * consts::SCREEN_WIDTH / consts::FOV) ,
-                      z: 0.0 }
+    return cube::Position { 
+      
+        x: (consts::SCREEN_WIDTH / 2.0 - angle_h * consts::SCREEN_WIDTH / consts::FOV) ,
+        y: (consts::SCREEN_HEIGHT/2.0 - angle_v * consts::SCREEN_WIDTH / consts::FOV) ,
+        z: 0.0 }
 }
 
 pub fn pos_to_napt2(pos: cube::Position) -> na::Point2<f32> {
   // ba ba ba ran
-  let newx = pos.x as f32;
-  let newy = pos.y as f32;
+  let mut angle_h = pos.y.atan2(pos.x) as f32;
+  let mut angle_v = pos.z.atan2(pos.x) as f32;
+
+  angle_h /= (angle_h.cos()).abs();
+  angle_v /= (angle_v.cos()).abs();
+
+  let newx = (consts::SCREEN_WIDTH / 2.0 - angle_h * consts::SCREEN_WIDTH / consts::FOV) as f32;
+  let newy = (consts::SCREEN_HEIGHT/2.0 - angle_v * consts::SCREEN_WIDTH / consts::FOV) as f32;
   return na::Point2::new(newx, newy)
   }
 
