@@ -99,34 +99,9 @@ impl EventHandler for MainState {
     gui::graph(ctx);
 
     // BEGIN ACTUAL DRAW ////////////////////
-
-
-
-    // first attempt at a cube, delete me
-
-    {
-      /*
-      let cube = cube::cube_funtimes();
-
-      for i in 0..cube.wires.len() {
-
-             // crosshair vertical line
-      let (origin, dest) = (na::Point2::new(307.0, 207.0), na::Point2::new(309.0, 289.0));
-      let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
-      graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
-              }
-      */
-    }
-
-    //
     
     {
-      // attempt at crosshairs
-
-      //  line(screenWidth/2-5, screenHeight/2, [screenWidth/2+5, screenHeight/2);
-      //  line(screenWidth/2, screenHeight/2-5,[screenWidth/2, screenHeight/2+5);
-
-      // consts::SCREEN_WIDTH, consts::SCREEN_HEIGHT
+      // crosshairs
 
       // horizontal
       let (origin, dest) = (na::Point2::new(consts::SCREEN_WIDTH/2.0-5.0, consts::SCREEN_HEIGHT/2.0), na::Point2::new(consts::SCREEN_WIDTH/2.0+5.0, consts::SCREEN_HEIGHT/2.0));
@@ -137,7 +112,6 @@ impl EventHandler for MainState {
       let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
       graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
 
-
     }
     
     // ok lets draw a cube
@@ -147,31 +121,9 @@ impl EventHandler for MainState {
       for i in 0..cube.wires.len() {
 
         /*
-
-        // pretty ugly that I'm multipling by 10
-        let startx = cube.wires[i].start.x * 10 as f32;
-        let starty = cube.wires[i].start.y * 10 as f32;
-        let mut endx = cube.wires[i].end.x * 10 as f32;
-        let endy = cube.wires[i].end.y * 10 as f32;
-
-        if startx == endx {
-          // ggez freaks out if the line has zero length
-          if starty == endy {
-            println!("collison found");
-            endx = endx + 0.1;
-          }
-        }
-        
-        println!("Start X: {:?}", startx);
-        println!("Start Y: {:?}", starty);
-        println!("End X: {:?}", endx);
-        println!("End Y: {:?}", endy);
-
-        let nextk = cube.wires[i].start; //(1.0, 1.0) as na::Point2<f32>
-        let naz = pos_to_napt2(cube.wires[i].start);
-        //println!("Next K: {:?}", nextk);
-        //println!("Naz Z: {:?}", naz);
-
+        //wires end and start positions transformed to camera coordinates
+        let cam_pos_start = to_cam_coords(cube.wires[i].start);
+        let cam_pos_end = to_cam_coords(cube.wires[i].end);
         */
 
         if cube.wires[i].start.x == cube.wires[i].end.x {
@@ -182,18 +134,15 @@ impl EventHandler for MainState {
           }
         }
 
+        let draw_start = point_on_canvas(cube.wires[i].start);
+        let draw_end = point_on_canvas(cube.wires[i].end);
 
-        let nas = pos_to_napt2(cube.wires[i].start);
-        let nae = pos_to_napt2(cube.wires[i].end);
-
-        println!("Nas S: {:?}", nas);
-        println!("Nae E: {:?}", nae);
+        println!("Draw Start: {:?}", draw_start);
+        println!("Draw End: {:?}", draw_end);
 
 
-        // draw a wire
-        //let (origin, dest) = (na::Point2::new(startx, cube.wires[i].start.y), na::Point2::new(cube.wires[i].end.x, cube.wires[i].end.y));      
-        let (origin, dest) = (nas, nae);
-        
+        // draw a cube wire
+        let (origin, dest) = (draw_start, draw_end);
         let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
         graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
         }
@@ -310,22 +259,13 @@ impl EventHandler for MainState {
   }
 
 // helper function garbage
-  pub fn point_on_canvas(pos: cube::Position) -> cube::Position {
-    let mut angle_h = pos.y.atan2(pos.x) as f32;
-    let mut angle_v = pos.z.atan2(pos.x) as f32;
 
-    angle_h /= (angle_h.cos()).abs();
-    angle_v /= (angle_v.cos()).abs();
+pub fn point_on_canvas(pos: cube::Position) -> na::Point2<f32> {
+  // this takes a 3D position and maps it to a location
+  // on the canvas in 2D space
+  // this takes a r_flightsim position and returns
+  // a na::Point2 object that ggez can easily ingest
 
-    return cube::Position { 
-      
-        x: (consts::SCREEN_WIDTH / 2.0 - angle_h * consts::SCREEN_WIDTH / consts::FOV) ,
-        y: (consts::SCREEN_HEIGHT/2.0 - angle_v * consts::SCREEN_WIDTH / consts::FOV) ,
-        z: 0.0 }
-}
-
-pub fn pos_to_napt2(pos: cube::Position) -> na::Point2<f32> {
-  // ba ba ba ran
   let mut angle_h = pos.y.atan2(pos.x) as f32;
   let mut angle_v = pos.z.atan2(pos.x) as f32;
 
