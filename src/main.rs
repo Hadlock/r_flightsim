@@ -40,8 +40,21 @@ const CAMPOSITION: cube::Position = cube::Position {
 
 
 struct MainState {
+  // circle pos
   pos_x: f32,
   pos_y: f32,
+
+  // camera state
+  direction: f32,
+  rotation_y: f32,
+  pmousex: f32,
+  pmousey: f32,
+  
+  // cube pos
+    //  cub_x: f32,
+    //  cub_y: f32,
+
+  // gui things
   imgui_wrapper: ImGuiWrapper,
   hidpi_factor: f32,
 }
@@ -53,6 +66,10 @@ impl MainState {
         let s = MainState {
             pos_x: 200.0,
             pos_y: 200.0,
+            direction: std::f32::consts::FRAC_PI_8, // PI/8,
+            rotation_y: 0.0,
+            pmousex: 0.0,
+            pmousey: 0.0,
             imgui_wrapper,
             hidpi_factor,
         };
@@ -65,7 +82,7 @@ impl EventHandler for MainState {
   // update game state
 
   fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
-      // Increase or decrease `position_x` by 0.5, or by 5.0 if Shift is held.
+      // circle movement... Increase or decrease `position_x` by 0.5, or by 5.0 if Shift is held.
       if keyboard::is_key_pressed(ctx, KeyCode::D) {
         if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
             self.pos_x += 4.5;
@@ -88,6 +105,11 @@ impl EventHandler for MainState {
           }
           self.pos_y -= 0.5;
       }
+
+      // cube movement
+
+
+
 
       Ok(())
   }
@@ -120,9 +142,10 @@ impl EventHandler for MainState {
 
       for i in 0..cube.wires.len() {
 
-        /*
+        
         //wires end and start positions transformed to camera coordinates
         let cam_pos_start = to_cam_coords(cube.wires[i].start);
+        /*
         let cam_pos_end = to_cam_coords(cube.wires[i].end);
         */
 
@@ -228,6 +251,28 @@ impl EventHandler for MainState {
 
   fn mouse_motion_event(&mut self, _ctx: &mut Context, x: f32, y: f32, _dx: f32, _dy: f32) {
       self.imgui_wrapper.update_mouse_pos(x, y);
+
+      // calculate direction for wireframe
+
+      //direction+=(pmouseX-mouseX)*2*fov/screenWidth*4;
+      self.direction = (self.pmousex-x)*2.0*consts::FOV/consts::SCREEN_WIDTH*4.0;
+      
+      {
+        // this probably needs to go into the draw section
+        let mut dir = self.direction;
+
+        //while(direction>=2*PI) direction-=2*PI;
+        //while(direction<2*PI) direction+=2*PI;
+        while self.direction >= consts::PI2 {self.direction = dir-consts::PI2};
+        // next line is broken TODO: fixme
+        // while self.direction <= consts::PI2 {self.direction = dir+consts::PI2};
+        }
+
+      // wrap up
+      // set previous mouse X/Y for use later
+      self.pmousex = x;
+      self.pmousey = y;
+
   }
 
   fn mouse_button_down_event(
@@ -282,14 +327,16 @@ pub fn to_cam_coords(pos: cube::Position) -> cube::Position {
 
   // TODO: lines 286-299 need to be refactored as rust to work
 
-  /*
   //calculating rotation
   let rx = r_pos.x as f32;
   let ry = r_pos.y as f32;
   let rz = r_pos.z as f32;
 
+
+  
   //rotation z-axis
-  rPos.x=rx*cos(-direction)-ry*sin(-direction);
+  //r_pos.x=rx*cos(-direction)-ry*sin(-direction);
+  /*
   rPos.y=rx*sin(-direction)+ry*cos(-direction);
 
   //rotation y-axis
