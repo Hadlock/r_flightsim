@@ -2,7 +2,10 @@
 
 ![r_flightsim logo](https://github.com/hadlock/r_flightsim/blob/master/static/r_flightsim_logo_sm.png)
 
-An basic wireframe flight simulator in rust, using the piston 2D graphics library
+An basic wireframe flight simulator in rust, using the ggez 2D graphics library
+
+rustc 1.40.0 (rust 2018 edition)
+ggez 0.5.1
 
 ## Build Requirements
 
