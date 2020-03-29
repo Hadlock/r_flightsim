@@ -1,3 +1,6 @@
+# r_flightsim specific
+imgui.ini
+
 # cargo autocreated
 /target
 **/*.rs.bk

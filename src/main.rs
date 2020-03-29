@@ -1,133 +1,344 @@
 // cli
-extern crate clap;
-
-// piston graphics and stuff
-extern crate piston_window;
-extern crate touch_visualizer;
-
-// fps counter
-// extern crate fps_counter;
+use clap;
 
 // clap
 use clap::{Arg, App};
 
-// piston things
-use piston_window::*;
-use touch_visualizer::TouchVisualizer;
+// chads stuff
+mod cube;
+mod consts;
 
-// camera FOV
-static FOV: f64 = std::f64::consts::FRAC_PI_2;
-// screen constants
-static SCREEN_WIDTH: f64 = 600.0;
-static SCREEN_HEIGHT:  f64 = 480.0;
 
-/// Contains colors that can be used in the game
-pub mod game_colors {
-    pub const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
-    pub const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
-    pub const BLUE: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
-    pub const LIGHTBLUE: [f32; 4] = [0.0, 1.0, 1.0, 1.0];
-    pub const ORANGE: [f32; 4] = [1.0, 0.5, 0.0, 1.0];
-    pub const RED: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
-    pub const PINK: [f32; 4] = [1.0, 0.0, 1.0, 1.0];
-    pub const ANGEL: [f32; 4 ] = [0.5,0.5,1.0,0.5];
-    pub const GREEN: [f32; 4 ] = [0.0,0.5,0.0,1.0];
-}
+// ui crap
+use crate::imgui_wrapper::ImGuiWrapper;
+// chad's ui crap
+mod gui;
 
-// camera position
-#[derive(Debug, Default, Copy, Clone)]
-struct Position {
-    x: f64,
-    y: f64,
-    z: f64,
-}
+mod imgui_wrapper;
 
-impl Position {
-    fn up(&mut self) {
-        self.y += 1.0;
-    }
-    fn position(&mut self, a: f64, b: f64, c: f64) {
-        self.x = a;
-        self.y = b;
-        self.z = c;
-    }
+// boilerplate
+//use ggez::conf;
+use ggez::event::{self, EventHandler, KeyCode, KeyMods, MouseButton};
+use ggez::{graphics, nalgebra as na, timer};
+use ggez::input::keyboard;
+use ggez::{Context, GameResult};
 
-    fn relative(c: Position, d: Position) -> Position {
-        // finds relative position between two points
-        // returns new position struct
-        return Position { x:  c.x + d.x, y: c.y + d.y, z: c.z + d.z }
-    }
-}
+use ggez::conf::{WindowMode, WindowSetup};
+
+// annoying consts
 
 // camera position
 //static mut camPosition : Position(x = 0.0, y = -2.0 , z = 0.0);
-
-const CAMPOSITION: Position = Position {
-    x: 0.0,
-    y: -2.0,
-    z: 0.0,
+const CAMPOSITION: cube::Position = cube::Position {
+  // this is probably in a bad spot
+  x: 0.0,
+  y: -2.0,
+  z: 0.0,
 };
 
-#[derive(Debug, Copy, Clone)]
-struct Wire {
-    start: Position,
-    end: Position,
+// end annoying consts
+
+
+struct MainState {
+  // circle pos
+  pos_x: f32,
+  pos_y: f32,
+
+  // camera state
+  direction: f32,
+  rotation_y: f32,
+  pmousex: f32,
+  pmousey: f32,
+  
+  // cube pos
+    //  cub_x: f32,
+    //  cub_y: f32,
+
+  // gui things
+  imgui_wrapper: ImGuiWrapper,
+  hidpi_factor: f32,
 }
 
-impl Wire {
-    fn wire(&mut self, s: Position, e: Position) {
-        self.start = s;
-        self.end = e;
+impl MainState {
+    //fn new() -> GameResult<MainState> {
+      fn new(mut ctx: &mut Context, hidpi_factor: f32) -> GameResult<MainState> {
+        let imgui_wrapper = ImGuiWrapper::new(&mut ctx);
+        let s = MainState {
+            pos_x: 200.0,
+            pos_y: 200.0,
+            direction: std::f32::consts::FRAC_PI_8, // PI/8,
+            rotation_y: 0.0,
+            pmousex: 0.0,
+            pmousey: 0.0,
+            imgui_wrapper,
+            hidpi_factor,
+        };
+        Ok(s)
     }
 }
 
-impl Default for Wire {
-    fn default() -> Wire {
-        Wire {
-            start: Position::default(),
-            end:   Position::default(),
+impl EventHandler for MainState {
+
+  // update game state
+
+  fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
+      // circle movement... Increase or decrease `position_x` by 0.5, or by 5.0 if Shift is held.
+      if keyboard::is_key_pressed(ctx, KeyCode::D) {
+        if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
+            self.pos_x += 4.5;
         }
-    }
-}
-
-struct Cube {
-    wires: [Wire; 12],
-}
-
-impl Default for Cube {
-    fn default() -> Cube {
-        Cube {
-            wires: [Wire::default(); 12],
+        self.pos_x += 0.5;
+      } else if keyboard::is_key_pressed(ctx, KeyCode::A) {
+          if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
+              self.pos_x -= 4.5;
+          }
+          self.pos_x -= 0.5;
+      }
+      if keyboard::is_key_pressed(ctx, KeyCode::W) {
+        if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
+            self.pos_y += 4.5;
         }
+        self.pos_y += 0.5;
+      } else if keyboard::is_key_pressed(ctx, KeyCode::S) {
+          if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
+              self.pos_y -= 4.5;
+          }
+          self.pos_y -= 0.5;
+      }
+
+      // cube movement
+
+
+
+
+      Ok(())
+  }
+
+  // draw new game state
+
+  fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
+    //graphics::clear(ctx, [0.1, 0.2, 0.3, 1.0].into());
+    gui::graph(ctx);
+
+    // BEGIN ACTUAL DRAW ////////////////////
+    
+    {
+      // crosshairs
+
+      // horizontal
+      let (origin, dest) = (na::Point2::new(consts::SCREEN_WIDTH/2.0-5.0, consts::SCREEN_HEIGHT/2.0), na::Point2::new(consts::SCREEN_WIDTH/2.0+5.0, consts::SCREEN_HEIGHT/2.0));
+      let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
+      graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
+      // vertical
+      let (origin, dest) = (na::Point2::new(consts::SCREEN_WIDTH/2.0, consts::SCREEN_HEIGHT/2.0-5.0), na::Point2::new(consts::SCREEN_WIDTH/2.0, consts::SCREEN_HEIGHT/2.0+5.0));
+      let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
+      graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
+
     }
+    
+    // ok lets draw a cube
+    {
+      let mut cube = cube::cube_funtimes();
+
+      for i in 0..cube.wires.len() {
+
+        
+        //wires end and start positions transformed to camera coordinates
+        let cam_pos_start = to_cam_coords(cube.wires[i].start);
+        /*
+        let cam_pos_end = to_cam_coords(cube.wires[i].end);
+        */
+
+        if cube.wires[i].start.x == cube.wires[i].end.x {
+          // ggez freaks out if the line has zero length
+          if cube.wires[i].start.y == cube.wires[i].end.y {
+            println!("collison found");
+            cube.wires[i].end.x = cube.wires[i].end.x + 0.001;
+          }
+        }
+
+        let draw_start = point_on_canvas(cube.wires[i].start);
+        let draw_end = point_on_canvas(cube.wires[i].end);
+
+        println!("Draw Start: {:?}", draw_start);
+        println!("Draw End: {:?}", draw_end);
+
+
+        // draw a cube wire
+        let (origin, dest) = (draw_start, draw_end);
+        let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
+        graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
+        }
+      }
+
+    
+    //
+    {
+      //generic rectangle
+      /*
+      let rectangle = graphics::Mesh::new_rectangle(
+        ctx,
+        graphics::DrawMode::fill(),
+        [0.0, 0.0, 30.0, 30.0].into(),
+        graphics::WHITE,
+        )?;
+      graphics::draw(ctx, &rectangle, (na::Point2::new(0.0, 0.0),))?;
+      */
+    }
+
+
+    // Create a circle at `position_x` and draw
+
+    {
+    // render game stuff
+    let circle = graphics::Mesh::new_circle(
+      ctx,
+      graphics::DrawMode::fill(),
+      na::Point2::new(self.pos_x, self.pos_y),
+      70.0,
+      0.9,
+      graphics::WHITE,
+      )?;
+
+      graphics::draw(ctx, &circle, graphics::DrawParam::default())?;
+    }
+
+    // END ACTUAL DRAW ////////////////////////
+
+    // draw GUI things
+    {
+      self.imgui_wrapper.render(ctx, self.hidpi_factor);
+    }
+
+    graphics::present(ctx)?;
+    timer::yield_now();
+    Ok(())
+
+
+  }
+
+  // listen for control events
+
+  fn key_down_event(
+      &mut self,
+      ctx: &mut Context,
+      key: KeyCode,
+      mods: KeyMods,
+      _: bool) {
+
+        match key {
+          // Quit if Shift+Ctrl+Q is pressed.
+          KeyCode::Q => {
+              if mods.contains(KeyMods::SHIFT & KeyMods::CTRL) {
+                  println!("Terminating!");
+                  event::quit(ctx);
+              } else if mods.contains(KeyMods::SHIFT) || mods.contains(KeyMods::CTRL) {
+                  println!("You need to hold both Shift and Control to quit.");
+              } else {
+                  println!("Now you're not even trying!");
+              }
+          }
+          _ => (),
+        }
+      match key {
+        KeyCode::P => {
+            self.imgui_wrapper.open_popup();
+        }
+        _ => (),
+      }
+  }
+    // add mouse crap here
+
+  fn mouse_motion_event(&mut self, _ctx: &mut Context, x: f32, y: f32, _dx: f32, _dy: f32) {
+      self.imgui_wrapper.update_mouse_pos(x, y);
+
+      // calculate direction for wireframe
+
+      //direction+=(pmouseX-mouseX)*2*fov/screenWidth*4;
+      self.direction = (self.pmousex-x)*2.0*consts::FOV/consts::SCREEN_WIDTH*4.0;
+      
+      {
+        // this probably needs to go into the draw section
+        let mut dir = self.direction;
+
+        //while(direction>=2*PI) direction-=2*PI;
+        //while(direction<2*PI) direction+=2*PI;
+        while self.direction >= consts::PI2 {self.direction = dir-consts::PI2};
+        // next line is broken TODO: fixme
+        // while self.direction <= consts::PI2 {self.direction = dir+consts::PI2};
+        }
+
+      // wrap up
+      // set previous mouse X/Y for use later
+      self.pmousex = x;
+      self.pmousey = y;
+
+  }
+
+  fn mouse_button_down_event(
+      &mut self,
+      _ctx: &mut Context,
+      button: MouseButton,
+      _x: f32,
+      _y: f32,
+      ) {
+      self.imgui_wrapper.update_mouse_down((
+          button == MouseButton::Left,
+          button == MouseButton::Right,
+          button == MouseButton::Middle,
+      ));
+  }
+
+  fn mouse_button_up_event(
+      &mut self,
+      _ctx: &mut Context,
+      _button: MouseButton,
+      _x: f32,
+      _y: f32,
+      ) {
+      self.imgui_wrapper.update_mouse_down((false, false, false));
+  }
+
+    // end mouse crap
+    // end listen for control events
+  }
+
+// helper function garbage
+
+pub fn point_on_canvas(pos: cube::Position) -> na::Point2<f32> {
+  // this takes a 3D position and maps it to a location
+  // on the canvas in 2D space
+  // this takes a r_flightsim position and returns
+  // a na::Point2 object that ggez can easily ingest
+
+  let mut angle_h = pos.y.atan2(pos.x) as f32;
+  let mut angle_v = pos.z.atan2(pos.x) as f32;
+
+  angle_h /= (angle_h.cos()).abs();
+  angle_v /= (angle_v.cos()).abs();
+
+  let newx = (consts::SCREEN_WIDTH / 2.0 - angle_h * consts::SCREEN_WIDTH / consts::FOV) as f32;
+  let newy = (consts::SCREEN_HEIGHT/2.0 - angle_v * consts::SCREEN_WIDTH / consts::FOV) as f32;
+  return na::Point2::new(newx, newy)
 }
 
+pub fn to_cam_coords(pos: cube::Position) -> cube::Position {
+  let r_pos = cube::Position{x: 0.0, y: -2.0, z: 0.0};
 
-// Projects point onto camera "canvas"
-fn point_on_canvas(pos: Position) -> Position {
-    let mut angle_h = pos.y.atan2(pos.x) as f64;
-    let mut angle_v = pos.z.atan2(pos.x) as f64;
+  // TODO: lines 286-299 need to be refactored as rust to work
 
-    angle_h /= (angle_h.cos()).abs();
-    angle_v /= (angle_v.cos()).abs();
-
-    return Position { x: (SCREEN_WIDTH / 2.0 - angle_h * SCREEN_WIDTH / FOV) ,
-                      y: (SCREEN_HEIGHT/2.0 - angle_v * SCREEN_WIDTH / FOV) , 
-                      z: 0.0 }
-}
-
-fn to_cam_coords(pos: Position) -> Position{
-  let r_pos = Position{x: 0.0, y: -2.0, z: 0.0};
-  /*
   //calculating rotation
-  float rx=rPos.x;
-  float ry=rPos.y;
-  float rz=rPos.z;
+  let rx = r_pos.x as f32;
+  let ry = r_pos.y as f32;
+  let rz = r_pos.z as f32;
+
+
   
   //rotation z-axis
-  rPos.x=rx*cos(-direction)-ry*sin(-direction);
+  //r_pos.x=rx*cos(-direction)-ry*sin(-direction);
+  /*
   rPos.y=rx*sin(-direction)+ry*cos(-direction);
-  
+
   //rotation y-axis
   rx=rPos.x;
   rz=rPos.z;
@@ -137,122 +348,8 @@ fn to_cam_coords(pos: Position) -> Position{
   return r_pos;
 }
 
+pub fn main() -> GameResult {
 
-fn window() {
-    // camera direction
-    let mut direction = 0;
-
-    // cam position
-    let mut cam_position = Position::default();
-
-    // splice in piston window here
-    let mut window: PistonWindow = 
-        WindowSettings::new("r_flightsim", [SCREEN_WIDTH, SCREEN_HEIGHT])
-        .exit_on_esc(true).build().unwrap();
-
-    // button handle boilerplate
-    let mut touch_visualizer = TouchVisualizer::new();
-    let _events = Events::new(EventSettings::new().lazy(true));
-
-    let mut alt = 0;
-    let mut hdg = 0;
-
-    while let Some(e) = window.next() {
-        // button handle loop
-        touch_visualizer.event(window.size(), &e);
-        
-        if let Some(Button::Keyboard(key)) = e.press_args() {
-            if key == Key::W {
-                println!("down");
-                alt += 1;
-            }
-            if key == Key::S {
-                println!("up");
-                alt -= 1;
-            }
-            if key == Key::A {
-                println!("left/port");
-                hdg -= 1;
-                cam_position.x -= 1.0;
-            }
-            if key == Key::D {
-                println!("right/stbd");
-                hdg += 1;
-                cam_position.x += 1.0;
-            }
-            // positional stuff
-            println!("alt = {}, hdg = {}", alt, hdg);
-            cam_position.position(8.0,7.0,2.0);
-            println!("cam:: x = {}, y = {}, z = {}", cam_position.x, cam_position.y, cam_position.z);
-        }
-
-
-        window.draw_2d(&e, |c, g, _device| {
-            clear([0.0; 4], g);
-
-            // crosshairs
-            line(game_colors::WHITE, 
-                0.5, 
-                    [
-                        SCREEN_WIDTH/2.0-5.0 as f64,
-                        SCREEN_HEIGHT/2.0 as f64,
-                        SCREEN_WIDTH/2.0+5.0 as f64,
-                        SCREEN_HEIGHT/2.0 as f64
-                        ],
-                c.transform, g);
-
-            line(game_colors::WHITE, 
-                0.5, 
-                    [
-                        SCREEN_WIDTH/2.0 as f64,
-                        SCREEN_HEIGHT/2.0-5.0 as f64,
-                        SCREEN_WIDTH/2.0 as f64,
-                        SCREEN_HEIGHT/2.0+5 as f64
-                        ],
-                c.transform, g);
-
-            // things that move
-            line(game_colors::WHITE, 0.5, 
-                    [
-                        100.0 + hdg as f64, 
-                        350.0 + alt as f64, 
-                        300.0 + hdg as f64, 
-                        350.0 + alt as f64
-                        ], 
-                        c.transform, 
-                        g);
-
-            // instantiate cube
-            let cube = Cube::default();
-
-            for i in 0..cube.wires.len() {
-
-                //wires end and start positions transformed to camera coordinates
-                let cam_pos_start = to_cam_coords(cube.wires[i].start);
-                let cam_pos_end = to_cam_coords(cube.wires[i].end);
-                
-                //projection of start and endpoints to camera
-                let draw_start = point_on_canvas(cam_pos_start);
-                let draw_end = point_on_canvas(cam_pos_end);
-                
-                //drawing lines on screen
-                line(game_colors::WHITE, 0.5, 
-                    [
-                        draw_start.x as f64, 
-                        draw_start.y as f64, 
-                        draw_end.x as f64, 
-                        draw_end.y as f64
-                        ], 
-                        c.transform, 
-                        g);
-            }
-        });
-    }
-}
-
-
-fn main() {
-    
     // clap cli arguments
     let _matches = App::new("r_flightsim")
     .version("0.1.0")
@@ -266,5 +363,34 @@ fn main() {
 
 
     println!("---- r_flightsim Start ----");
-    window();
+
+    // just chad things
+
+    // cube::cube_funtimes();
+
+    // gui boilerplate
+
+    let hidpi_factor: f32;
+    {
+        // Create a dummy window so we can get monitor scaling information
+        let cb = ggez::ContextBuilder::new("", "");
+        let (_ctx, events_loop) = &mut cb.build()?;
+        hidpi_factor = events_loop.get_primary_monitor().get_hidpi_factor() as f32;
+        println!("main hidpi_factor = {}", hidpi_factor);
+    }
+
+
+    let cb = ggez::ContextBuilder::new("super_simple", "ggez")
+      .window_setup(WindowSetup::default().title("r_flightsim"))
+      .window_mode(
+        WindowMode::default()
+            .dimensions(consts::SCREEN_WIDTH, consts::SCREEN_HEIGHT)
+            .resizable(false),
+      );
+    let (ctx, event_loop) = &mut cb.build()?;
+    let state = &mut MainState::new(ctx, hidpi_factor)?;
+
+    // ignition
+    event::run(ctx, event_loop, state)
+
 }
