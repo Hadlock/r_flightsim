@@ -7,11 +7,11 @@ use clap::{Arg, App};
 // chads stuff
 mod cube;
 mod consts;
+mod logo;
 
 
 // ui crap
 use crate::imgui_wrapper::ImGuiWrapper;
-// chad's ui crap
 mod gui;
 
 mod imgui_wrapper;
@@ -35,9 +35,6 @@ const CAMPOSITION: cube::Position = cube::Position {
   y: -2.0,
   z: 0.0,
 };
-
-// end annoying consts
-
 
 struct MainState {
   // circle pos
@@ -114,13 +111,13 @@ impl EventHandler for MainState {
       Ok(())
   }
 
-  // draw new game state
-
+  
   fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
+    // draw new game state
     //graphics::clear(ctx, [0.1, 0.2, 0.3, 1.0].into());
     gui::graph(ctx);
 
-    // BEGIN ACTUAL DRAW ////////////////////
+    // begin engine draw
     
     {
       // crosshairs
@@ -171,22 +168,6 @@ impl EventHandler for MainState {
         }
       }
 
-    
-    //
-    {
-      //generic rectangle
-      /*
-      let rectangle = graphics::Mesh::new_rectangle(
-        ctx,
-        graphics::DrawMode::fill(),
-        [0.0, 0.0, 30.0, 30.0].into(),
-        graphics::WHITE,
-        )?;
-      graphics::draw(ctx, &rectangle, (na::Point2::new(0.0, 0.0),))?;
-      */
-    }
-
-
     // Create a circle at `position_x` and draw
 
     {
@@ -203,9 +184,9 @@ impl EventHandler for MainState {
       graphics::draw(ctx, &circle, graphics::DrawParam::default())?;
     }
 
-    // END ACTUAL DRAW ////////////////////////
+    // end engine draw
 
-    // draw GUI things
+    // draw gui
     {
       self.imgui_wrapper.render(ctx, self.hidpi_factor);
     }
@@ -219,8 +200,9 @@ impl EventHandler for MainState {
 
   // listen for control events
 
+  // process keyboard events
   fn key_down_event(
-      &mut self,
+    &mut self,
       ctx: &mut Context,
       key: KeyCode,
       mods: KeyMods,
@@ -247,8 +229,8 @@ impl EventHandler for MainState {
         _ => (),
       }
   }
-    // add mouse crap here
-
+  
+  // process mouse events
   fn mouse_motion_event(&mut self, _ctx: &mut Context, x: f32, y: f32, _dx: f32, _dy: f32) {
       self.imgui_wrapper.update_mouse_pos(x, y);
 
@@ -299,11 +281,10 @@ impl EventHandler for MainState {
       self.imgui_wrapper.update_mouse_down((false, false, false));
   }
 
-    // end mouse crap
-    // end listen for control events
   }
+// end listen for control events
 
-// helper function garbage
+// helper functions
 
 pub fn point_on_canvas(pos: cube::Position) -> na::Point2<f32> {
   // this takes a 3D position and maps it to a location
@@ -360,16 +341,10 @@ pub fn main() -> GameResult {
         .multiple(true)
         .help("verbosity level"))
     .get_matches();
+    logo::logo();
 
 
-    println!("---- r_flightsim Start ----");
-
-    // just chad things
-
-    // cube::cube_funtimes();
-
-    // gui boilerplate
-
+    // gui config
     let hidpi_factor: f32;
     {
         // Create a dummy window so we can get monitor scaling information
