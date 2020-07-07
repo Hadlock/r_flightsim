@@ -133,8 +133,8 @@ impl EventHandler for MainState {
 
     }
     
-    // ok lets draw a cube
     {
+      // ok lets draw a cube
       let mut cube = cube::cube_funtimes();
 
       for i in 0..cube.wires.len() {
@@ -149,7 +149,7 @@ impl EventHandler for MainState {
         if cube.wires[i].start.x == cube.wires[i].end.x {
           // ggez freaks out if the line has zero length
           if cube.wires[i].start.y == cube.wires[i].end.y {
-            println!("collison found");
+            // println!("collison found");
             cube.wires[i].end.x = cube.wires[i].end.x + 0.001;
           }
         }
@@ -157,8 +157,8 @@ impl EventHandler for MainState {
         let draw_start = point_on_canvas(cube.wires[i].start);
         let draw_end = point_on_canvas(cube.wires[i].end);
 
-        println!("Draw Start: {:?}", draw_start);
-        println!("Draw End: {:?}", draw_end);
+        // println!("Draw Start: {:?}", draw_start);
+        // println!("Draw End: {:?}", draw_end);
 
 
         // draw a cube wire
@@ -168,10 +168,8 @@ impl EventHandler for MainState {
         }
       }
 
-    // Create a circle at `position_x` and draw
-
     {
-    // render game stuff
+    // render circle
     let circle = graphics::Mesh::new_circle(
       ctx,
       graphics::DrawMode::fill(),
@@ -342,7 +340,6 @@ pub fn main() -> GameResult {
         .help("verbosity level"))
     .get_matches();
     logo::logo();
-
 
     // gui config
     let hidpi_factor: f32;

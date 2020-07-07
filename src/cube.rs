@@ -70,6 +70,6 @@ pub fn cube_funtimes() -> Cube {
           Wire{ start: cubepos.relative(-size/2.0, size/2.0, size/2.0), end: cubepos.relative(-size/2.0, size/2.0, -size/2.0) },
       ]
   };
-  println!("PRETTY COOL CUBE: {:?}", cool_cube);
+  // println!("PRETTY COOL CUBE: {:?}", cool_cube);
   cool_cube
 }
