@@ -1,3 +1,6 @@
+// r_flightsim a wireframe flight simulator
+
+// region boilerplate
 // cli
 use clap;
 
@@ -36,6 +39,8 @@ const CAMPOSITION: cube::Position = cube::Position {
   z: 0.0,
 };
 
+// endregion
+
 struct MainState {
   // circle pos
   pos_x: f32,
@@ -69,9 +74,9 @@ impl MainState {
             newcube: cube::prime_cube(),
   
             // camera
-            cam_pos: CAMPOSITION,
-            direction: std::f32::consts::FRAC_PI_8, // PI/8,
-            rotation_y: 0.0,
+            cam_pos: CAMPOSITION, // wasd
+            direction: std::f32::consts::FRAC_PI_8, // cam - mouse X
+            rotation_y: 0.0, // cam - mouse Y
             prev_mouse_x: 0.0,
             prev_mouse_y: 0.0,
             
@@ -88,7 +93,7 @@ impl EventHandler for MainState {
   // update game state
 
   fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
-      // region circle
+      // region camera
       // circle movement... Increase or decrease `position_x` by 0.5, or by 5.0 if Shift is held.
       // D
       if keyboard::is_key_pressed(ctx, KeyCode::D) {
@@ -253,6 +258,7 @@ impl EventHandler for MainState {
 
   }
 
+  // region control events
   // listen for control events
 
   // process keyboard events
@@ -351,8 +357,9 @@ impl EventHandler for MainState {
 
 }
 // end listen for control events
+// endregion
 
-// helper functions
+// region helper functions
 
 pub fn point_on_canvas(pos: cube::Position) -> na::Point2<f32> {
   // this takes a 3D position and maps it to a location
@@ -416,6 +423,7 @@ pub fn fix_ggez_collisions(mut wire: cube::Wire) -> cube::Wire {
   }
   return wire;
 }
+// endregion
 
 pub fn main() -> GameResult {
 
