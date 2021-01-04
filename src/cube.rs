@@ -26,6 +26,7 @@ pub struct Wire {
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Cube {
   pub wires: [Wire; 12],
+  pub cubepos: Position,
 }
 
 impl Cube {
@@ -34,14 +35,15 @@ impl Cube {
   //}
 }
 
-pub fn cube_funtimes() -> Cube {
+pub fn prime_cube() -> Cube {
   //let zenwire = Wire{..wire_funtimes()};
 
   let mut cubepos = Position{x: 6.0, y: 0.0, z: -1.5};
   let size: f32 = 2.0;
   //let Wire = cube::Wire;
 
-  let cool_cube = Cube{
+  let cubecumber = Cube{
+      cubepos: cubepos,
       wires:
       [
           //   wires[0] = new Wire(pos.relative(size/2, size/2, size/2), pos.relative(-size/2, size/2, size/2));
@@ -70,6 +72,7 @@ pub fn cube_funtimes() -> Cube {
           Wire{ start: cubepos.relative(-size/2.0, size/2.0, size/2.0), end: cubepos.relative(-size/2.0, size/2.0, -size/2.0) },
       ]
   };
-  // println!("PRETTY COOL CUBE: {:?}", cool_cube);
-  cool_cube
+  // println!("");
+  // println!("________PRIME CUBE: {:?}", cubecumber);
+  cubecumber
 }

@@ -41,15 +41,19 @@ struct MainState {
   pos_x: f32,
   pos_y: f32,
 
+  // cube pos
+  cube_x: f32,
+  cube_y: f32,
+  cube_z: f32,
+
+  // new cube
+  newcube: cube::Cube,
+
   // camera state
   direction: f32,
   rotation_y: f32,
   pmousex: f32,
   pmousey: f32,
-  
-  // cube pos
-    //  cub_x: f32,
-    //  cub_y: f32,
 
   // gui things
   imgui_wrapper: ImGuiWrapper,
@@ -61,8 +65,19 @@ impl MainState {
       fn new(mut ctx: &mut Context, hidpi_factor: f32) -> GameResult<MainState> {
         let imgui_wrapper = ImGuiWrapper::new(&mut ctx);
         let s = MainState {
-            pos_x: 200.0,
-            pos_y: 200.0,
+            // circle position
+            pos_x: 300.0,
+            pos_y: 160.0,
+
+            // cube position
+            cube_x: 6.0,
+            cube_y: 0.0,
+            cube_z: 0.0,
+
+            // new cube
+            newcube: cube::prime_cube(),
+  
+            // gui boilerplate
             direction: std::f32::consts::FRAC_PI_8, // PI/8,
             rotation_y: 0.0,
             pmousex: 0.0,
@@ -79,34 +94,66 @@ impl EventHandler for MainState {
   // update game state
 
   fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
+      // region circle
       // circle movement... Increase or decrease `position_x` by 0.5, or by 5.0 if Shift is held.
+      // D
       if keyboard::is_key_pressed(ctx, KeyCode::D) {
         if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
             self.pos_x += 4.5;
         }
         self.pos_x += 0.5;
+      // A
       } else if keyboard::is_key_pressed(ctx, KeyCode::A) {
           if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
               self.pos_x -= 4.5;
           }
           self.pos_x -= 0.5;
       }
+      // W
       if keyboard::is_key_pressed(ctx, KeyCode::W) {
         if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
             self.pos_y += 4.5;
         }
         self.pos_y += 0.5;
+      // S
       } else if keyboard::is_key_pressed(ctx, KeyCode::S) {
           if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
               self.pos_y -= 4.5;
           }
           self.pos_y -= 0.5;
       }
+      // endregion
+      
+      // region cube
+      // CUBE movement
 
-      // cube movement
-
-
-
+      // L
+      if keyboard::is_key_pressed(ctx, KeyCode::L) {
+        if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
+            self.cube_x += 4.5;
+        }
+        self.cube_x += 0.5;
+      // J
+      } else if keyboard::is_key_pressed(ctx, KeyCode::J) {
+          if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
+              self.cube_x -= 4.5;
+          }
+          self.cube_x -= 0.5;
+      }
+      // I
+      if keyboard::is_key_pressed(ctx, KeyCode::I) {
+        if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
+            self.cube_y += 4.5;
+        }
+        self.cube_y += 0.5;
+      // K
+      } else if keyboard::is_key_pressed(ctx, KeyCode::K) {
+          if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
+              self.cube_y -= 4.5;
+          }
+          self.cube_y -= 0.5;
+      }
+      // endregion
 
       Ok(())
   }
@@ -119,6 +166,7 @@ impl EventHandler for MainState {
 
     // begin engine draw
     
+    // region crosshair draw
     {
       // crosshairs
 
@@ -132,10 +180,19 @@ impl EventHandler for MainState {
       graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
 
     }
-    
+    // endregion
+
+    // region cube draw
     {
+      // newcube
+
+      println!("mah cube is too large: {:?}", self.newcube.wires);
+      println!("----------------------------------------");
+      println!("supah kubeah: {:?}", self.newcube.cubepos);
+      
+      println!("");
       // ok lets draw a cube
-      let mut cube = cube::cube_funtimes();
+      let mut cube = cube::prime_cube();
 
       for i in 0..cube.wires.len() {
 
@@ -167,7 +224,9 @@ impl EventHandler for MainState {
         graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
         }
       }
+    // endregion
 
+    // region circle draw
     {
     // render circle
     let circle = graphics::Mesh::new_circle(
@@ -181,6 +240,7 @@ impl EventHandler for MainState {
 
       graphics::draw(ctx, &circle, graphics::DrawParam::default())?;
     }
+    // endregion
 
     // end engine draw
 
