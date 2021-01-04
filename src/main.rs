@@ -94,32 +94,41 @@ impl EventHandler for MainState {
 
   fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
       // region camera
-      // circle movement... Increase or decrease `position_x` by 0.5, or by 5.0 if Shift is held.
+      // camera movement... Increase or decrease `position_x` by 0.5, or by 5.0 if Shift is held.
       // D
       if keyboard::is_key_pressed(ctx, KeyCode::D) {
         if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
             self.pos_x += 4.5;
+            self.cam_pos.x += 4.5; // camera X
+            // self.cam_pos.mv(x: (consts::SPEED*self.direction), y: (-consts::SPEED*self.direction.cos()), z: 0.0); // camera X
         }
         self.pos_x += 0.5;
+        self.cam_pos.x += 0.5 // camera X
       // A
       } else if keyboard::is_key_pressed(ctx, KeyCode::A) {
           if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
               self.pos_x -= 4.5;
+              self.cam_pos.x -= 4.5; // camera -X
           }
           self.pos_x -= 0.5;
+          self.cam_pos.x -= 0.5; // camera -X
       }
       // W
       if keyboard::is_key_pressed(ctx, KeyCode::W) {
         if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
             self.pos_y += 4.5;
+            self.cam_pos.y += 4.5; // camera Y
         }
         self.pos_y += 0.5;
+        self.cam_pos.y += 0.5; // camera Y
       // S
       } else if keyboard::is_key_pressed(ctx, KeyCode::S) {
           if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
               self.pos_y -= 4.5;
+              self.cam_pos.y -= 4.5; // camera -Y
           }
           self.pos_y -= 0.5;
+          self.cam_pos.y -= 0.5; // camera -Y
       }
       // endregion
       

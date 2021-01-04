@@ -15,6 +15,14 @@ impl Position {
       relpos
     }
 
+  pub fn mv(&mut self, x: f32, y: f32, z: f32) -> Position {
+    self.x += x;
+    self.y += y;
+    self.z += z;
+    let mvpos = Position{x: self.x, y: self.y, z: self.z};
+    mvpos
+  } 
+
 }
 
 #[derive(Debug, Default, Copy, Clone)]
