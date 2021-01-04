@@ -126,6 +126,26 @@ impl ImGuiWrapper {
       }
 
       // Window
+      ui.window(im_str!("Instructions"))
+        .size([300.0, 200.0], imgui::Condition::FirstUseEver)
+        .position([100.0, 100.0], imgui::Condition::FirstUseEver)
+        .build(|| {
+          ui.text(im_str!("Steering....WASD"));
+          ui.text(im_str!("Throttle up... Y"));
+          ui.text(im_str!("Throttle down..U"));
+          ui.text(im_str!("Brakes.........B"));
+          ui.text(im_str!("Landing Gear...G"));
+          ui.text(im_str!("Flaps..........F"));
+          ui.separator();
+          let mouse_pos = ui.io().mouse_pos;
+          ui.text(im_str!(
+            "Speed: ({:.1},{:.1})",
+            mouse_pos[0],
+            mouse_pos[1]
+          ));
+        });
+
+      // Window
       ui.window(im_str!("Main Menu"))
         .size([300.0, 200.0], imgui::Condition::FirstUseEver)
         .position([100.0, 100.0], imgui::Condition::FirstUseEver)
