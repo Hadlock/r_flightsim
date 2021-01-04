@@ -67,9 +67,11 @@ impl MainState {
             // new cube
             newcube: cube::prime_cube(),
   
-            // gui boilerplate
+            // camera
             direction: std::f32::consts::FRAC_PI_8, // PI/8,
             rotation_y: 0.0,
+            
+            // gui boilerplate
             pmousex: 0.0,
             pmousey: 0.0,
             imgui_wrapper,
@@ -115,8 +117,8 @@ impl EventHandler for MainState {
       // endregion
       
       // region cube
-      // CUBE movement
-      //let mut cube = self.newcube;
+      // CUBE position manipulation
+
       // L
       if keyboard::is_key_pressed(ctx, KeyCode::L) {
         if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
@@ -179,33 +181,20 @@ impl EventHandler for MainState {
       println!("mah cube is too large: {:?}", self.newcube.wires);
       println!("----------------------------------------");
       println!("supah kubeah: {:?}", self.newcube.cubepos);
-      
       println!("");
+
       // ok lets draw a cube
-      //let mut cube = self.newcube;
-
       for i in 0..self.newcube.wires.len() {
-
-        
         //wires end and start positions transformed to camera coordinates
         let cam_pos_start = to_cam_coords(self.newcube.wires[i].start);
         let cam_pos_end = to_cam_coords(self.newcube.wires[i].end);
-        
-
-        if self.newcube.wires[i].start.x == self.newcube.wires[i].end.x {
-          // ggez freaks out if the line has zero length
-          if self.newcube.wires[i].start.y == self.newcube.wires[i].end.y {
-            // println!("collison found");
-            self.newcube.wires[i].end.x = self.newcube.wires[i].end.x + 0.001;
-          }
-        }
+        fix_ggez_collisions(self.newcube.wires[i]);
 
         let draw_start = point_on_canvas(self.newcube.wires[i].start);
         let draw_end = point_on_canvas(self.newcube.wires[i].end);
 
         // println!("Draw Start: {:?}", draw_start);
         // println!("Draw End: {:?}", draw_end);
-
 
         // draw a cube wire
         let (origin, dest) = (draw_start, draw_end);
@@ -222,7 +211,7 @@ impl EventHandler for MainState {
       ctx,
       graphics::DrawMode::fill(),
       na::Point2::new(self.pos_x, self.pos_y),
-      70.0,
+      40.0,
       0.9,
       graphics::WHITE,
       )?;
@@ -284,8 +273,15 @@ impl EventHandler for MainState {
       // calculate direction for wireframe
 
       //direction+=(pmouseX-mouseX)*2*fov/screenWidth*4;
-      self.direction = (self.pmousex-x)*2.0*consts::FOV/consts::SCREEN_WIDTH*4.0;
-      
+      if consts::FIXEDCAM == 1 {
+        // fixedcam
+        self.direction = (self.pmousex-x)*2.0*consts::FOV/consts::SCREEN_WIDTH*4.0;
+      }
+      else {
+        // mousecam
+        self.direction = (self.pmousex-x)*2.0*consts::FOV/consts::SCREEN_WIDTH*4.0;
+      }
+        
       {
         // this probably needs to go into the draw section
         let mut dir = self.direction;
@@ -354,19 +350,18 @@ pub fn to_cam_coords(pos: cube::Position) -> cube::Position {
   let r_pos = cube::Position{x: 0.0, y: -2.0, z: 0.0};
 
   // TODO: lines 286-299 need to be refactored as rust to work
+  // TODO: update this is fn  point_on_canvas
 
   //calculating rotation
   let rx = r_pos.x as f32;
   let ry = r_pos.y as f32;
   let rz = r_pos.z as f32;
 
-
-  
   //rotation z-axis
   //r_pos.x=rx*cos(-direction)-ry*sin(-direction);
   /*
   rPos.y=rx*sin(-direction)+ry*cos(-direction);
-
+  
   //rotation y-axis
   rx=rPos.x;
   rz=rPos.z;
@@ -374,6 +369,19 @@ pub fn to_cam_coords(pos: cube::Position) -> cube::Position {
   rPos.z=rz*cos(-rotationY)-rx*sin(-rotationY);
   */
   return r_pos;
+}
+
+pub fn fix_ggez_collisions(mut wire: cube::Wire) -> cube::Wire {
+  // ggez freaks out if the line has zero length
+
+  if wire.start.x == wire.end.x {
+    if wire.start.y == wire.end.y {
+      // add graphically 0 length to wire position to get around
+      // ggez limitation
+      wire.end.x = wire.end.x + 0.001;
+    }
+  }
+  return wire;
 }
 
 pub fn main() -> GameResult {

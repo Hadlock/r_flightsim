@@ -8,3 +8,5 @@ pub static FOV: f32 = std::f32::consts::FRAC_PI_2;
 pub static PI2: f32 = std::f32::consts::PI*2.0;
 
 pub static SPEED: f32 = 0.1;
+
+pub static FIXEDCAM: i32 = 1;
