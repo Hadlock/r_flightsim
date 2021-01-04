@@ -37,12 +37,12 @@ impl Cube {
 
 pub fn prime_cube() -> Cube {
 
-  let mut cubepos = Position{x: 6.0, y: 0.0, z: -1.5};
+  let mut cubepos = Position{x: 6.0, y: 0.0, z: 0.0};
   let size: f32 = 2.0;
   //let Wire = cube::Wire;
 
-  let mut cubecumber = Cube{
-      cubepos: Position{x: 6.0, y: 0.0, z: -1.5},
+  let cubecumber = Cube{
+      cubepos: Position{x: 6.0, y: 0.0, z: 0.0},
       wires:
       [
           //   wires[0] = new Wire(pos.relative(size/2, size/2, size/2), pos.relative(-size/2, size/2, size/2));

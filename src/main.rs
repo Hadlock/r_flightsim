@@ -45,10 +45,11 @@ struct MainState {
   newcube: cube::Cube,
 
   // camera state
+  cam_pos: cube::Position,
   direction: f32,
   rotation_y: f32,
-  pmousex: f32,
-  pmousey: f32,
+  prev_mouse_x: f32,
+  prev_mouse_y: f32,
 
   // gui things
   imgui_wrapper: ImGuiWrapper,
@@ -68,12 +69,13 @@ impl MainState {
             newcube: cube::prime_cube(),
   
             // camera
+            cam_pos: CAMPOSITION,
             direction: std::f32::consts::FRAC_PI_8, // PI/8,
             rotation_y: 0.0,
+            prev_mouse_x: 0.0,
+            prev_mouse_y: 0.0,
             
             // gui boilerplate
-            pmousex: 0.0,
-            pmousey: 0.0,
             imgui_wrapper,
             hidpi_factor,
         };
@@ -186,20 +188,37 @@ impl EventHandler for MainState {
       // ok lets draw a cube
       for i in 0..self.newcube.wires.len() {
         //wires end and start positions transformed to camera coordinates
-        let cam_pos_start = to_cam_coords(self.newcube.wires[i].start);
-        let cam_pos_end = to_cam_coords(self.newcube.wires[i].end);
-        fix_ggez_collisions(self.newcube.wires[i]);
+        if consts::FIXEDCAM == 1 {
+          // fixedcam
+          fix_ggez_collisions(self.newcube.wires[i]); // actually neccessary
 
-        let draw_start = point_on_canvas(self.newcube.wires[i].start);
-        let draw_end = point_on_canvas(self.newcube.wires[i].end);
+          let draw_start = point_on_canvas(self.newcube.wires[i].start);
+          let draw_end = point_on_canvas(self.newcube.wires[i].end);
+  
+          // println!("Draw Start: {:?}", draw_start);
+          // println!("Draw End: {:?}", draw_end);
+  
+          // draw a wire
+          let (origin, dest) = (draw_start, draw_end);
+          let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
+          graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;          
 
-        // println!("Draw Start: {:?}", draw_start);
-        // println!("Draw End: {:?}", draw_end);
-
-        // draw a cube wire
-        let (origin, dest) = (draw_start, draw_end);
-        let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
-        graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
+        }
+        else {
+          // mousecam
+          let cam_pos_start = new_2cam_coords(self.newcube.wires[i].start, self.cam_pos, self.rotation_y, self.direction);
+          let cam_pos_end   = new_2cam_coords(self.newcube.wires[i].end, self.cam_pos, self.rotation_y, self.direction);
+          
+          fix_ggez_collisions(self.newcube.wires[i]); // actually neccessary
+          
+          let draw_start = point_on_canvas(cam_pos_start);
+          let draw_end = point_on_canvas(cam_pos_end);
+          
+          // draw a wire
+          let (origin, dest) = (draw_start, draw_end);
+          let line = graphics::Mesh::new_line(ctx, &[origin, dest], 1.0, graphics::WHITE)?;
+          graphics::draw(ctx, &line, (na::Point2::new(0.0, 0.0),))?;
+          }
         }
       }
     // endregion
@@ -272,31 +291,41 @@ impl EventHandler for MainState {
 
       // calculate direction for wireframe
 
-      //direction+=(pmouseX-mouseX)*2*fov/screenWidth*4;
       if consts::FIXEDCAM == 1 {
         // fixedcam
-        self.direction = (self.pmousex-x)*2.0*consts::FOV/consts::SCREEN_WIDTH*4.0;
+
+        //direction+=(pmouseX-mouseX)*2*fov/screenWidth*4;
+        self.direction = (self.prev_mouse_x-x)*2.0*consts::FOV/consts::SCREEN_WIDTH*4.0;
       }
       else {
         // mousecam
-        self.direction = (self.pmousex-x)*2.0*consts::FOV/consts::SCREEN_WIDTH*4.0;
-      }
         
-      {
-        // this probably needs to go into the draw section
-        let mut dir = self.direction;
-
-        //while(direction>=2*PI) direction-=2*PI;
-        //while(direction<2*PI) direction+=2*PI;
-        while self.direction >= consts::PI2 {self.direction = dir-consts::PI2};
-        // next line is broken TODO: fixme
-        // while self.direction <= consts::PI2 {self.direction = dir+consts::PI2};
+        // not broken mouse steering!
+        //turning with the mouse
+        self.direction = (self.prev_mouse_x-x)*2.0*consts::FOV/consts::SCREEN_WIDTH*4.0;
+        
+        while self.direction >= consts::PI2 {
+          self.direction -= consts::PI2;
         }
+        // while(direction<2*PI) direction+=2*PI;
+        
+        self.rotation_y -= (self.prev_mouse_y-y)*2.0*consts::FOV/consts::SCREEN_HEIGHT;
+        // rotationY-=(pmouseY-mouseY)*2*fov/screenHeight;
+        if self.rotation_y > consts::PI2 {
+          self.rotation_y = consts::PI2;
+        }
+        // if(rotationY>PI/2) rotationY=PI/2;
+        if self.rotation_y < (-consts::PI2) {
+          self.rotation_y -= consts::PI2;
+        }
+        // if(rotationY<-PI/2) rotationY=-PI/2;
+      }
+
 
       // wrap up
       // set previous mouse X/Y for use later
-      self.pmousex = x;
-      self.pmousey = y;
+      self.prev_mouse_x = x;
+      self.prev_mouse_y = y;
 
   }
 
@@ -346,38 +375,50 @@ pub fn point_on_canvas(pos: cube::Position) -> na::Point2<f32> {
   return na::Point2::new(newx, newy)
 }
 
-pub fn to_cam_coords(pos: cube::Position) -> cube::Position {
+pub fn to_cam_coords(_r_pos: cube::Position) -> cube::Position {
   let r_pos = cube::Position{x: 0.0, y: -2.0, z: 0.0};
+  return r_pos;
+}
 
-  // TODO: lines 286-299 need to be refactored as rust to work
-  // TODO: update this is fn  point_on_canvas
-
+pub fn new_2cam_coords( wire: cube::Position, 
+                        cam_pos: cube::Position,
+                        cam_rotation_y: f32,
+                        cam_direction_x: f32) -> cube::Position {
+  let mut r_pos = cube::Position{x: (wire.x-cam_pos.x),
+                                 y: (wire.y-cam_pos.y),
+                                 z: (wire.z-cam_pos.z)};
+  
   //calculating rotation
-  let rx = r_pos.x as f32;
-  let ry = r_pos.y as f32;
-  let rz = r_pos.z as f32;
-
-  //rotation z-axis
-  //r_pos.x=rx*cos(-direction)-ry*sin(-direction);
-  /*
-  rPos.y=rx*sin(-direction)+ry*cos(-direction);
+  let mut rx = r_pos.x as f32;
+  let     ry = r_pos.y as f32; // mut not needed!
+  let     rz = r_pos.z as f32; // mut not needed!
+  
+  // rotation z-axis
+  r_pos.x = rx*(-cam_direction_x.cos())-ry*(-cam_direction_x.sin());
+  r_pos.y = rx*(-cam_direction_x.cos())+ry*(-cam_direction_x.cos());
+  // TODO: probably make direction a negative value, see original proc blw
+  //rPos.x=rx*cos(-direction)-ry*sin(-direction);
+  //rPos.y=rx*sin(-direction)+ry*cos(-direction);
   
   //rotation y-axis
-  rx=rPos.x;
-  rz=rPos.z;
-  rPos.x=rx*cos(-rotationY)+rz*sin(-rotationY);
-  rPos.z=rz*cos(-rotationY)-rx*sin(-rotationY);
-  */
-  return r_pos;
+  rx = r_pos.x;
+  // rz = r_pos.z; no need to reassign this
+  r_pos.x = rx*(-cam_rotation_y.cos())+rz*(-cam_rotation_y.sin());
+  r_pos.z = rz*(-cam_rotation_y.cos())-rx*(-cam_rotation_y.sin());
+  // TODO: probably make rotation a negative value, see original proc blw
+  // rPos.x = rx*cos(-rotationY)+rz*sin(-rotationY);
+  // rPos.z=rz*cos(-rotationY)-rx*sin(-rotationY);
+  
+  return r_pos;  
 }
 
 pub fn fix_ggez_collisions(mut wire: cube::Wire) -> cube::Wire {
   // ggez freaks out if the line has zero length
-
+  // this can (does) happen if (when) the perspective is just right
   if wire.start.x == wire.end.x {
     if wire.start.y == wire.end.y {
       // add graphically 0 length to wire position to get around
-      // ggez limitation
+      // ggez literal value limitation
       wire.end.x = wire.end.x + 0.001;
     }
   }
