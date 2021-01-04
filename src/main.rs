@@ -25,7 +25,7 @@ use ggez::{Context, GameResult};
 
 use ggez::conf::{WindowMode, WindowSetup};
 
-// annoying consts
+// annoying const
 
 // camera position
 //static mut camPosition : Position(x = 0.0, y = -2.0 , z = 0.0);
@@ -288,37 +288,33 @@ impl EventHandler for MainState {
   // process mouse events
   fn mouse_motion_event(&mut self, _ctx: &mut Context, x: f32, y: f32, _dx: f32, _dy: f32) {
       self.imgui_wrapper.update_mouse_pos(x, y);
-
       // calculate direction for wireframe
-
       if consts::FIXEDCAM == 1 {
         // fixedcam
-
-        //direction+=(pmouseX-mouseX)*2*fov/screenWidth*4;
         self.direction = (self.prev_mouse_x-x)*2.0*consts::FOV/consts::SCREEN_WIDTH*4.0;
       }
+
       else {
         // mousecam
-        
-        // not broken mouse steering!
         //turning with the mouse
+
+        // TODO: fix why cube stopped drawing pt 2 or 2
         self.direction = (self.prev_mouse_x-x)*2.0*consts::FOV/consts::SCREEN_WIDTH*4.0;
-        
         while self.direction >= consts::PI2 {
           self.direction -= consts::PI2;
         }
-        // while(direction<2*PI) direction+=2*PI;
-        
+        while self.direction < consts::PI2 {
+          self.direction += consts::PI2;
+        }
+
         self.rotation_y -= (self.prev_mouse_y-y)*2.0*consts::FOV/consts::SCREEN_HEIGHT;
-        // rotationY-=(pmouseY-mouseY)*2*fov/screenHeight;
-        if self.rotation_y > consts::PI2 {
-          self.rotation_y = consts::PI2;
+        if self.rotation_y > consts::FOV {
+          self.rotation_y = consts::FOV;
         }
-        // if(rotationY>PI/2) rotationY=PI/2;
-        if self.rotation_y < (-consts::PI2) {
-          self.rotation_y -= consts::PI2;
+        if self.rotation_y < (-consts::FOV) {
+          self.rotation_y = -consts::FOV;
         }
-        // if(rotationY<-PI/2) rotationY=-PI/2;
+        
       }
 
 
@@ -353,7 +349,7 @@ impl EventHandler for MainState {
       self.imgui_wrapper.update_mouse_down((false, false, false));
   }
 
-  }
+}
 // end listen for control events
 
 // helper functions
@@ -396,24 +392,20 @@ pub fn new_2cam_coords( wire: cube::Position,
   // rotation z-axis
   r_pos.x = rx*(-cam_direction_x.cos())-ry*(-cam_direction_x.sin());
   r_pos.y = rx*(-cam_direction_x.cos())+ry*(-cam_direction_x.cos());
-  // TODO: probably make direction a negative value, see original proc blw
-  //rPos.x=rx*cos(-direction)-ry*sin(-direction);
-  //rPos.y=rx*sin(-direction)+ry*cos(-direction);
   
   //rotation y-axis
   rx = r_pos.x;
   // rz = r_pos.z; no need to reassign this
   r_pos.x = rx*(-cam_rotation_y.cos())+rz*(-cam_rotation_y.sin());
   r_pos.z = rz*(-cam_rotation_y.cos())-rx*(-cam_rotation_y.sin());
-  // TODO: probably make rotation a negative value, see original proc blw
-  // rPos.x = rx*cos(-rotationY)+rz*sin(-rotationY);
-  // rPos.z=rz*cos(-rotationY)-rx*sin(-rotationY);
   
   return r_pos;  
 }
 
 pub fn fix_ggez_collisions(mut wire: cube::Wire) -> cube::Wire {
   // ggez freaks out if the line has zero length
+  // there is no way to override this behavior
+
   // this can (does) happen if (when) the perspective is just right
   if wire.start.x == wire.end.x {
     if wire.start.y == wire.end.y {
