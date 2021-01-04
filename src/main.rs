@@ -41,11 +41,6 @@ struct MainState {
   pos_x: f32,
   pos_y: f32,
 
-  // cube pos
-  cube_x: f32,
-  cube_y: f32,
-  cube_z: f32,
-
   // new cube
   newcube: cube::Cube,
 
@@ -68,11 +63,6 @@ impl MainState {
             // circle position
             pos_x: 300.0,
             pos_y: 160.0,
-
-            // cube position
-            cube_x: 6.0,
-            cube_y: 0.0,
-            cube_z: 0.0,
 
             // new cube
             newcube: cube::prime_cube(),
@@ -126,32 +116,32 @@ impl EventHandler for MainState {
       
       // region cube
       // CUBE movement
-
+      //let mut cube = self.newcube;
       // L
       if keyboard::is_key_pressed(ctx, KeyCode::L) {
         if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
-            self.cube_x += 4.5;
+          self.newcube.cubepos.x += 4.5;
         }
-        self.cube_x += 0.5;
+        self.newcube.cubepos.x += 0.5;
       // J
       } else if keyboard::is_key_pressed(ctx, KeyCode::J) {
           if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
-              self.cube_x -= 4.5;
+            self.newcube.cubepos.x -= 4.5;
           }
-          self.cube_x -= 0.5;
+          self.newcube.cubepos.x -= 0.5;
       }
       // I
       if keyboard::is_key_pressed(ctx, KeyCode::I) {
         if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
-            self.cube_y += 4.5;
+          self.newcube.cubepos.y += 4.5;
         }
-        self.cube_y += 0.5;
+        self.newcube.cubepos.y += 0.5;
       // K
       } else if keyboard::is_key_pressed(ctx, KeyCode::K) {
           if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
-              self.cube_y -= 4.5;
+            self.newcube.cubepos.y -= 4.5;
           }
-          self.cube_y -= 0.5;
+          self.newcube.cubepos.y -= 0.5;
       }
       // endregion
 
@@ -192,27 +182,26 @@ impl EventHandler for MainState {
       
       println!("");
       // ok lets draw a cube
-      let mut cube = cube::prime_cube();
+      //let mut cube = self.newcube;
 
-      for i in 0..cube.wires.len() {
+      for i in 0..self.newcube.wires.len() {
 
         
         //wires end and start positions transformed to camera coordinates
-        let cam_pos_start = to_cam_coords(cube.wires[i].start);
-        /*
-        let cam_pos_end = to_cam_coords(cube.wires[i].end);
-        */
+        let cam_pos_start = to_cam_coords(self.newcube.wires[i].start);
+        let cam_pos_end = to_cam_coords(self.newcube.wires[i].end);
+        
 
-        if cube.wires[i].start.x == cube.wires[i].end.x {
+        if self.newcube.wires[i].start.x == self.newcube.wires[i].end.x {
           // ggez freaks out if the line has zero length
-          if cube.wires[i].start.y == cube.wires[i].end.y {
+          if self.newcube.wires[i].start.y == self.newcube.wires[i].end.y {
             // println!("collison found");
-            cube.wires[i].end.x = cube.wires[i].end.x + 0.001;
+            self.newcube.wires[i].end.x = self.newcube.wires[i].end.x + 0.001;
           }
         }
 
-        let draw_start = point_on_canvas(cube.wires[i].start);
-        let draw_end = point_on_canvas(cube.wires[i].end);
+        let draw_start = point_on_canvas(self.newcube.wires[i].start);
+        let draw_end = point_on_canvas(self.newcube.wires[i].end);
 
         // println!("Draw Start: {:?}", draw_start);
         // println!("Draw End: {:?}", draw_end);
