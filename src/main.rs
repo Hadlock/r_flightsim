@@ -194,10 +194,6 @@ impl EventHandler for MainState {
     {
       // newcube
 
-      println!("mah cube is too large: {:?}", self.newcube.wires);
-      println!("----------------------------------------");
-      println!("supah kubeah: {:?}", self.newcube.cubepos);
-      println!("");
 
       // ok lets draw a cube
       for i in 0..self.newcube.wires.len() {
