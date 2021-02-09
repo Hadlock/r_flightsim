@@ -96,7 +96,7 @@ impl EventHandler for MainState {
               // self.cam_pos.mv(x: (consts::SPEED*self.direction), y: (-consts::SPEED*self.direction.cos()), z: 0.0); // camera X
           }
           self.pos_x += 0.5;
-          self.cam_pos.x += 0.5 // camera X
+          self.cam_pos.x += 0.12 // camera X
         // A
         } else if keyboard::is_key_pressed(ctx, KeyCode::S) {
             if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
@@ -104,7 +104,7 @@ impl EventHandler for MainState {
                 self.cam_pos.x -= 4.5; // camera -X
             }
             self.pos_x -= 0.5;
-            self.cam_pos.x -= 0.5; // camera -X
+            self.cam_pos.x -= 0.12; // camera -X
         }
         // W
         if keyboard::is_key_pressed(ctx, KeyCode::D) {
@@ -113,7 +113,7 @@ impl EventHandler for MainState {
               self.cam_pos.y += 4.5; // camera Y
           }
           self.pos_y += 0.5;
-          self.cam_pos.y += 0.5; // camera Y
+          self.cam_pos.y += 0.12; // camera Y
         // S
         } else if keyboard::is_key_pressed(ctx, KeyCode::A) {
             if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
@@ -121,8 +121,25 @@ impl EventHandler for MainState {
                 self.cam_pos.y -= 4.5; // camera -Y
             }
             self.pos_y -= 0.5;
-            self.cam_pos.y -= 0.5; // camera -Y
+            self.cam_pos.y -= 0.12; // camera -Y
+        }  
+
+        // W
+        if keyboard::is_key_pressed(ctx, KeyCode::E) {
+          if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
+              self.cam_pos.z += 4.5; // camera Y
+          }
+          self.cam_pos.z += 0.12; // camera Y
+        // S
+        } else if keyboard::is_key_pressed(ctx, KeyCode::R) {
+            if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
+                self.cam_pos.z -= 4.5; // camera -Y
+            }
+            self.cam_pos.z -= 0.12; // camera -Y
         }
+
+
+        
         // endregion
         
         // region cube
