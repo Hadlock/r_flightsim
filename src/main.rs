@@ -88,7 +88,7 @@ impl EventHandler for MainState {
     fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
         // region camera
         // camera movement... Increase or decrease `position_x` by 0.5, or by 5.0 if Shift is held.
-        // D
+        // W
         if keyboard::is_key_pressed(ctx, KeyCode::W) {
           if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
               self.pos_x += 4.5;
@@ -97,7 +97,7 @@ impl EventHandler for MainState {
           }
           self.pos_x += 0.5;
           self.cam_pos.x += 0.12 // camera X
-        // A
+        // S
         } else if keyboard::is_key_pressed(ctx, KeyCode::S) {
             if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
                 self.pos_x -= 4.5;
@@ -106,7 +106,7 @@ impl EventHandler for MainState {
             self.pos_x -= 0.5;
             self.cam_pos.x -= 0.12; // camera -X
         }
-        // W
+        // D
         if keyboard::is_key_pressed(ctx, KeyCode::D) {
           if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
               self.pos_y += 4.5;
@@ -114,7 +114,7 @@ impl EventHandler for MainState {
           }
           self.pos_y += 0.5;
           self.cam_pos.y += 0.12; // camera Y
-        // S
+        // A
         } else if keyboard::is_key_pressed(ctx, KeyCode::A) {
             if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
                 self.pos_y -= 4.5;
@@ -124,13 +124,13 @@ impl EventHandler for MainState {
             self.cam_pos.y -= 0.12; // camera -Y
         }  
 
-        // W
+        // E
         if keyboard::is_key_pressed(ctx, KeyCode::E) {
           if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
               self.cam_pos.z += 4.5; // camera Y
           }
           self.cam_pos.z += 0.12; // camera Y
-        // S
+        // R
         } else if keyboard::is_key_pressed(ctx, KeyCode::R) {
             if keyboard::is_mod_active(ctx, KeyMods::SHIFT) {
                 self.cam_pos.z -= 4.5; // camera -Y

@@ -59,6 +59,7 @@ impl ImGuiWrapper {
     let rgba_image = image::open(&std::path::Path::new("static/r_flightsim_logo_sm.png"))
       .unwrap()
       .to_rgba();
+      //.to_rgba8();
 
     // Load an image as a texture
     let image_dimensions = rgba_image.dimensions();
