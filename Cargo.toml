@@ -8,6 +8,7 @@ egui = "0.21.0"
 egui-miniquad = "0.14.0"
 egui-macroquad = "0.15.0"
 macroquad = { version="0.3.25", default-features=false }
+macroquad-profiler = "0.1.1" # https://not-fl3.github.io/platformer-book/profiling.html
 egui_demo_lib = "0.21.0"
 egui_logger = "0.3.1"
 

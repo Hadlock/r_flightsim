@@ -1,7 +1,6 @@
-
-
-use macroquad::prelude::*;
 use egui_demo_lib;
+use macroquad::{telemetry}; //let _z = telemetry::ZoneGuard::new("input handling");  
+use macroquad::prelude::*;
 mod consts;
 mod logo;
 
@@ -17,20 +16,21 @@ fn conf() -> Conf {
 
 #[macroquad::main(conf)]
 async fn main() {
-    //egui_logger::init().unwrap(); 
-    logo::logo();
-
-    //egui stuff 1 of 3
+    //egui_logger::init().unwrap();
+    logo::logo(); 
+    /* #region egui stuff 1 of 3 */
     let mut show_egui_demo_windows = false;
     let mut egui_demo_windows = egui_demo_lib::DemoWindows::default();
+    /* #endregion */
 
-    //chad stuff
+    /* #region chad stuff */
     let mut gridspacing = 1.0;
     let mut plane_position = vec3(0., 0.5, 0.);
     let mut throttle = false;
     let mut speed = 0.0;
-    
-    //normal stuff
+    /* #endregion */
+
+    /* #region normal stuff */
     let mut x = 0.0;
     let mut switch = false;
     let bounds = 8.0;
@@ -44,7 +44,6 @@ async fn main() {
         pitch.sin(),
         yaw.sin() * pitch.cos(),
     )
-
     .normalize();
     let mut right = front.cross(world_up).normalize();
     let mut up;
@@ -55,42 +54,49 @@ async fn main() {
     let mut grabbed = true;
     set_cursor_grab(grabbed);
     show_mouse(false);
+    /* #endregion */
 
-    //another egui
+    /* #region another egui */
     let mut pixels_per_point: Option<f32> = None;
+    /* #endregion */
 
     loop {
         let delta = get_frame_time();
 
-        if is_key_pressed(KeyCode::T) {
-            throttle = !throttle;
-        }
+        /* #region all input handling */
+            let _z = telemetry::ZoneGuard::new("input handling");  
+            /* #region keyboard input handling */
+            if is_key_pressed(KeyCode::T) {
+                throttle = !throttle;
+            }
 
-        if is_key_pressed(KeyCode::Escape) {
-            break;
-        }
-        if is_key_pressed(KeyCode::Tab) {
-            grabbed = !grabbed;
-            set_cursor_grab(grabbed);
-            show_mouse(!grabbed);
-        }
-        if is_key_down(KeyCode::W) {
-            position += front * consts::MOVE_SPEED;
-        }
-        if is_key_down(KeyCode::A) {
-            position -= right * consts::MOVE_SPEED;
-        }
-        if is_key_down(KeyCode::S) {
-            position -= front * consts::MOVE_SPEED;
-        }
-        if is_key_down(KeyCode::D) {
-            position += right *consts:: MOVE_SPEED;
-        }
+            if is_key_pressed(KeyCode::Escape) {
+                break;
+            }
+            if is_key_pressed(KeyCode::Tab) {
+                grabbed = !grabbed;
+                set_cursor_grab(grabbed);
+                show_mouse(!grabbed);
+            }
+            if is_key_down(KeyCode::W) {
+                position += front * consts::MOVE_SPEED;
+            }
+            if is_key_down(KeyCode::A) {
+                position -= right * consts::MOVE_SPEED;
+            }
+            if is_key_down(KeyCode::S) {
+                position -= front * consts::MOVE_SPEED;
+            }
+            if is_key_down(KeyCode::D) {
+                position += right * consts::MOVE_SPEED;
+            }
 
-        let mouse_position: Vec2 = mouse_position().into();
-        let mouse_delta = mouse_position - last_mouse_position;
-        last_mouse_position = mouse_position;
+            let mouse_position: Vec2 = mouse_position().into();
+            let mouse_delta = mouse_position - last_mouse_position;
+            last_mouse_position = mouse_position;
+        /* #endregion */
 
+        /* #region mouse input handling */
         yaw += mouse_delta.x * delta * consts::LOOK_SPEED;
         pitch += mouse_delta.y * delta * -consts::LOOK_SPEED;
 
@@ -111,10 +117,12 @@ async fn main() {
         if x >= bounds || x <= -bounds {
             switch = !switch;
         }
+        /* #endregion */
 
+        /* #endregion */
         clear_background(consts::FSBLUE);
 
-        //egui 2 of 3
+        /* #region egui 2 of 3 */
         egui_macroquad::ui(|egui_ctx| {
             if pixels_per_point.is_none() {
                 pixels_per_point = Some(egui_ctx.pixels_per_point());
@@ -137,11 +145,10 @@ async fn main() {
                     egui_ctx.set_pixels_per_point(pixels_per_point.unwrap());
                 }
             });
-        //egui_logger::logger_ui(ui);
-        //egui::Window::new("Log").show(egui_ctx, |ui| {egui_logger.logger_ui(ui);});
-
+            //egui_logger::logger_ui(ui);
+            //egui::Window::new("Log").show(egui_ctx, |ui| {egui_logger.logger_ui(ui);});
         });
-
+        /* #endregion */
 
         // Going 3d!
 
@@ -152,6 +159,7 @@ async fn main() {
             ..Default::default()
         });
 
+        /* #region draw grid */
         //draw stuff
         if position[1] < 5.0 {
             gridspacing = 1.0;
@@ -167,6 +175,7 @@ async fn main() {
         }
 
         draw_grid(100, gridspacing, GRAY, WHITE); //(primary x/y), (grid)
+                                                  /* #endregion */
 
         //draw_line_3d(
         //    vec3(x, 0.0, x),
@@ -174,44 +183,48 @@ async fn main() {
         //    Color::new(1.0, 1.0, 0.0, 1.0),
         //);
 
-        //draw_cube_wires(vec3(1., 1., 1.), vec3(0., 0., 0.), GREEN);
-        //draw_cube_wires(vec3(0., 0.5, 0.), vec3(1., 1., 1.), BLUE); //position, size
-        //draw_cube_wires(vec3(1., 1., 1.), vec3(1., 1., 1.), RED);
-        
-        fn draw_airplane(plane_position: Vec3, color: Color){
+        /* #region draw airplane */
+        fn draw_airplane(plane_position: Vec3, color: Color) {
             draw_cube_wires(plane_position, vec3(1., 1., 1.), color); //position, size
         }
 
         draw_airplane(plane_position, ORANGE);
-        if throttle{
+        if throttle {
             speed += 0.01;
         };
-        if !throttle{
-            if speed > 0.0{
+        if !throttle {
+            if speed > 0.0 {
                 speed -= 0.01;
             }
         }
-        if speed > 0.0{
+        /* #endregion */
+
+        /* #region handle airplane speed and direction */
+        if speed > 0.0 {
             plane_position[0] += speed;
         }
 
         if is_key_down(KeyCode::Right) {
-            plane_position[2] += speed*0.12;
+            plane_position[2] += speed * 0.12;
         }
         if is_key_down(KeyCode::Left) {
-            plane_position[2] -= speed*0.12;
+            plane_position[2] -= speed * 0.12;
         }
-        if speed > 0.5{
+        if speed > 0.5 {
             plane_position[1] += 0.5;
         }
-        if speed < 0.5{
-            if plane_position[1] > 0.0{
-            plane_position[1] -= 1.0;}
+        if speed < 0.5 {
+            if plane_position[1] > 0.0 {
+                plane_position[1] -= 1.0;
+            }
         }
+        /* #endregion */
 
         // Back to screen space, render some text
 
         set_default_camera();
+
+        /* #region draw text */
         draw_text("First Person Camera", 10.0, 20.0, 30.0, WHITE);
 
         draw_text(
@@ -228,7 +241,11 @@ async fn main() {
             30.0,
             WHITE,
         );
-
+        /* #endregion */
+        
+        // draw profiler
+        if consts::PROFILER { macroquad_profiler::profiler(Default::default()); }
+        
         //draw egui on top 3 of 3
         egui_macroquad::draw();
 

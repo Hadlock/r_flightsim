@@ -524,6 +524,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "macroquad-profiler"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e01f1d4404977fe93fe244853658011a7c50652f8a969c4ac443a1d4cfb135fb"
+dependencies = [
+ "macroquad",
+]
+
+[[package]]
 name = "macroquad_macro"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -827,6 +836,7 @@ dependencies = [
  "egui_demo_lib",
  "egui_logger",
  "macroquad",
+ "macroquad-profiler",
 ]
 
 [[package]]
