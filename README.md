@@ -9,6 +9,14 @@ ggez 0.5.1
 
 ## Build Requirements
 
+On Debian 12 'Bookworm' you'll need these packages to build:
+- `sudo apt install build-essential`
+- `sudo apt-get -y install libasound2-dev`
+
+Should compile in ~25 seconds
+
+Deprecated:
+
 On Ubuntu 18.04 LTS you'll need these packages to build:
 
 - `sudo apt install gcc`
