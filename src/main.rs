@@ -1,6 +1,6 @@
 use egui_demo_lib;
-use macroquad::{telemetry}; //let _z = telemetry::ZoneGuard::new("input handling");  
 use macroquad::prelude::*;
+use macroquad::telemetry; //let _z = telemetry::ZoneGuard::new("input handling");
 mod consts;
 mod logo;
 
@@ -14,10 +14,38 @@ fn conf() -> Conf {
     }
 }
 
+struct Plane {
+    F: f64,
+    P: f64,
+    /* Angle calculations. */
+    compassRadians: f64,
+    forwardTiltRadians: f64,
+    sideTiltRadians: f64,
+
+    /* Next 9 values make up a rotation matrix for a camera transform. See wiki1. */
+    R11: f64,
+    R12: f64,
+    R13: f64,
+
+    R21: f64,
+    R22: f64,
+    R23: f64,
+
+    R31: f64,
+    R32: f64,
+    R33: f64,
+
+    /* Things */
+    cos_sideTilt: f64,
+    sin_sideTilt: f64,
+    sin_compass: f64,
+
+}
+
 #[macroquad::main(conf)]
 async fn main() {
     //egui_logger::init().unwrap();
-    logo::logo(); 
+    logo::logo();
     /* #region egui stuff 1 of 3 */
     let mut show_egui_demo_windows = false;
     let mut egui_demo_windows = egui_demo_lib::DemoWindows::default();
@@ -28,6 +56,26 @@ async fn main() {
     let mut plane_position = vec3(0., 0.5, 0.);
     let mut throttle = false;
     let mut speed = 0.0;
+    /* #endregion */
+
+    /* #region cbanks vars */
+    let mut D: f64 = 1.0;
+    let mut worldZ: f64 = 999.;
+    let mut speed: f64 = 8.;
+    let mut worldY: f64 = 999.;
+
+    let mut worldX: f64 = 999.;
+    let mut forwardTiltRadians: f64 = 0.033;
+    let mut airplaneZ: f64 = 1000.;
+    let mut S: f64 =74.5;
+    let mut speedFeet: f64 = 221.;
+    let mut X: f64 = 7.26;
+
+    let gravityAccel: f64 = 32.2;
+    let mut cos_sideTilt: f64 = 1.;
+
+
+
     /* #endregion */
 
     /* #region normal stuff */
@@ -62,38 +110,39 @@ async fn main() {
 
     loop {
         let delta = get_frame_time();
+        let timeDelta = delta; // = || { get_frame_time()}; //this should be the same as delta, using for cbanks naming parity
 
         /* #region all input handling */
-            let _z = telemetry::ZoneGuard::new("input handling");  
-            /* #region keyboard input handling */
-            if is_key_pressed(KeyCode::T) {
-                throttle = !throttle;
-            }
+        let _z = telemetry::ZoneGuard::new("input handling");
+        /* #region keyboard input handling */
+        if is_key_pressed(KeyCode::T) {
+            throttle = !throttle;
+        }
 
-            if is_key_pressed(KeyCode::Escape) {
-                break;
-            }
-            if is_key_pressed(KeyCode::Tab) {
-                grabbed = !grabbed;
-                set_cursor_grab(grabbed);
-                show_mouse(!grabbed);
-            }
-            if is_key_down(KeyCode::W) {
-                position += front * consts::MOVE_SPEED;
-            }
-            if is_key_down(KeyCode::A) {
-                position -= right * consts::MOVE_SPEED;
-            }
-            if is_key_down(KeyCode::S) {
-                position -= front * consts::MOVE_SPEED;
-            }
-            if is_key_down(KeyCode::D) {
-                position += right * consts::MOVE_SPEED;
-            }
+        if is_key_pressed(KeyCode::Escape) {
+            break;
+        }
+        if is_key_pressed(KeyCode::Tab) {
+            grabbed = !grabbed;
+            set_cursor_grab(grabbed);
+            show_mouse(!grabbed);
+        }
+        if is_key_down(KeyCode::W) {
+            position += front * consts::MOVE_SPEED;
+        }
+        if is_key_down(KeyCode::A) {
+            position -= right * consts::MOVE_SPEED;
+        }
+        if is_key_down(KeyCode::S) {
+            position -= front * consts::MOVE_SPEED;
+        }
+        if is_key_down(KeyCode::D) {
+            position += right * consts::MOVE_SPEED;
+        }
 
-            let mouse_position: Vec2 = mouse_position().into();
-            let mouse_delta = mouse_position - last_mouse_position;
-            last_mouse_position = mouse_position;
+        let mouse_position: Vec2 = mouse_position().into();
+        let mouse_delta = mouse_position - last_mouse_position;
+        last_mouse_position = mouse_position;
         /* #endregion */
 
         /* #region mouse input handling */
@@ -121,6 +170,17 @@ async fn main() {
 
         /* #endregion */
         clear_background(consts::FSBLUE);
+
+        let plane0 = Plane{
+            F: timeDelta * P,
+            compassRadians: cos_sideTilt * timeDelta * F / 
+                            cos_forwardTilt + d /
+                            cos_forwardTilt + sinSideTilt * timeDelta,
+            forwardTiltRadians: d * timeDelta * cos_sideTilt - timeDelta * F * sin_sideTilt,
+
+
+        };
+
 
         /* #region egui 2 of 3 */
         egui_macroquad::ui(|egui_ctx| {
@@ -242,10 +302,12 @@ async fn main() {
             WHITE,
         );
         /* #endregion */
-        
+
         // draw profiler
-        if consts::PROFILER { macroquad_profiler::profiler(Default::default()); }
-        
+        if consts::PROFILER {
+            macroquad_profiler::profiler(Default::default());
+        }
+
         //draw egui on top 3 of 3
         egui_macroquad::draw();
 
