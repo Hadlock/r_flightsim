@@ -12,8 +12,8 @@ pub struct Assets {
 
 pub async fn load_assets() -> Assets {
     // Load textures
-    let rust_logo = load_texture("src/rust.png").await.unwrap();
-    let ferris = load_texture("src/ferris.png").await.unwrap();
+    let rust_logo = load_texture("src/texture/rust.png").await.unwrap();
+    let ferris = load_texture("src/texture/ferris.png").await.unwrap();
 
     // Load OBJ models
     let (models1, _) = tobj::load_obj("src/obj/teapot.obj", &tobj::LoadOptions::default()).unwrap();
