@@ -14,7 +14,7 @@ use draw_models::draw_models;
 fn conf() -> Conf {
     Conf {
         window_title: String::from("r_flightsim7"),
-        window_width: 1260,
+        window_width: 1280,
         window_height: 768,
         fullscreen: false,
         ..Default::default()
@@ -103,7 +103,7 @@ async fn main() {
             ..Default::default()
         });
 
-        
+        // grid
         if position[1] < 5.0 {
             gridspacing = 1.0;
         }
@@ -116,8 +116,12 @@ async fn main() {
         if position[1] > 30.0 {
             gridspacing = 50.0;
         }
-        draw_grid(100, 1., GRAY, WHITE);
-        
+        if position[1] > 70.0 {
+            gridspacing = 100.0;
+        }
+        draw_grid(100, gridspacing, GRAY, WHITE);
+        //end grid
+
         // Conditionally draw the objects based on the value of draw_objects
         if draw_objects {
             draw_objects::draw_objects(&assets.rust_logo, &assets.ferris).await;
@@ -131,9 +135,6 @@ async fn main() {
         }
 
         /* #region draw airplane */
-        fn draw_orange_cube(plane_position: Vec3, color: Color) {
-            draw_cube_wires(plane_position, vec3(1., 1., 1.), color); //position, size
-        }
 
         fn draw_airplane(plane_position: Vec3, color: Color) {
             draw_cube_wires(plane_position, vec3(1., 1., 1.), color); //position, size
@@ -151,25 +152,25 @@ async fn main() {
         }
         /* #endregion */
 
-                /* #region handle airplane speed and direction */
-                if speed > 0.0 {
-                    plane_position[0] += speed;
-                }
-        
-                if is_key_down(KeyCode::Right) {
-                    plane_position[2] += speed * 0.12;
-                }
-                if is_key_down(KeyCode::Left) {
-                    plane_position[2] -= speed * 0.12;
-                }
-                if speed > 0.5 {
-                    plane_position[1] += 0.5;
-                }
-                if speed < 0.5 {
-                    if plane_position[1] > 0.0 {
-                        plane_position[1] -= 1.0;
-                    }
-                }
+        /* #region handle airplane speed and direction */
+        if speed > 0.0 {
+            plane_position[0] += speed;
+        }
+
+        if is_key_down(KeyCode::Right) {
+            plane_position[2] += speed * 0.12;
+        }
+        if is_key_down(KeyCode::Left) {
+            plane_position[2] -= speed * 0.12;
+        }
+        if speed > 0.5 {
+            plane_position[1] += 0.5;
+        }
+        if speed < 0.5 {
+            if plane_position[1] > 0.0 {
+                plane_position[1] -= 1.0;
+            }
+        }
         /* #endregion */
 
         // Back to screen space, render some text
@@ -194,7 +195,19 @@ async fn main() {
             48.0 + 42.0,
             30.0,
             WHITE,
-                );
+        );
+
+        // Calculate the altitude via x-coordinate for the top right corner and draw the text
+        let altitude = position[1].round();
+        let text = if altitude > 18000.0 {
+            // do crazy flight level stuff to be fancy
+            format!("FL{:03}", (altitude / 100.0).round() as i32)
+        } else {
+            format!("alt: {}", altitude)
+        };
+        let x = screen_width() - measure_text(&text, None, 30, 1.0).width - 10.0;
+        draw_text(&text, x, 20.0, 30.0, WHITE);   
+
         /* #endregion */
 
         // Increment the rotation angle
