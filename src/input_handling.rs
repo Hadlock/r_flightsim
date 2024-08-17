@@ -13,10 +13,14 @@ pub fn handle_input(
     up: &mut Vec3,
     x: &mut f32,
     switch: &mut bool,
+    throttle: &mut bool,
     bounds: f32,
     delta: f32,
     world_up: Vec3,
 ) -> Vec2 { // Return Vec2
+
+    // probably pass this all in as a giant game state object
+
     /* #region keyboard input handling */
     if is_key_pressed(KeyCode::Escape) {
         std::process::exit(0);
@@ -28,6 +32,9 @@ pub fn handle_input(
     }
     if is_key_pressed(KeyCode::P) {
         *draw_objects = !*draw_objects;
+    }
+    if is_key_pressed(KeyCode::T) {
+        *throttle = !*throttle;
     }
 
     if is_key_pressed(KeyCode::Tab) {
@@ -48,7 +55,7 @@ pub fn handle_input(
         *position += *right * MOVE_SPEED;
     }
 
-    let (mouse_x, mouse_y) = mouse_position(); // Destructure the tuple returned by mouse_position
+    let (mouse_x, mouse_y) = mouse_position();
     let mouse_position: Vec2 = vec2(mouse_x, mouse_y);
     let mouse_delta = mouse_position - *last_mouse_position;
     *last_mouse_position = mouse_position;
@@ -68,8 +75,8 @@ pub fn handle_input(
     )
     .normalize();
 
-    *right = front.cross(world_up).normalize(); // Use front_param
-    *up = right.cross(*front).normalize(); // Use front_param
+    *right = front.cross(world_up).normalize();
+    *up = right.cross(*front).normalize();
 
     *x += if *switch { 0.04 } else { -0.04 };
     if *x >= bounds || *x <= -bounds {

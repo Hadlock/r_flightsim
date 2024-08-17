@@ -64,6 +64,8 @@ pub fn calculate_aabb(mesh: &Mesh) -> BoundingBox {
 
 pub fn check_collision(a: &BoundingBox, b: &BoundingBox) -> bool {
     // probably need to use the scaled values
+
+    // not currently working
     (a.min.x <= b.max.x && a.max.x >= b.min.x) &&
     (a.min.y <= b.max.y && a.max.y >= b.min.y) &&
     (a.min.z <= b.max.z && a.max.z >= b.min.z)

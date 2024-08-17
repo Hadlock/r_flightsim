@@ -87,6 +87,7 @@ async fn main() {
             &mut up,
             &mut x,
             &mut switch,
+            &mut throttle,
             bounds,
             delta,
             world_up,
