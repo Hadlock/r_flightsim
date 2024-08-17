@@ -1,9 +1,12 @@
-use macroquad::prelude::*;
-use tobj::{self, LoadOptions};
-use std::path::Path;
-
 mod consts;
 mod logo;
+mod draw_objects;
+mod load_assets;
+mod draw_models;
+
+use macroquad::prelude::*;
+use load_assets::load_assets;
+use draw_models::draw_models;
 
 fn conf() -> Conf {
     Conf {
@@ -19,20 +22,12 @@ fn conf() -> Conf {
 async fn main() {
     logo::logo(); 
 
-    let rust_logo = load_texture("src/rust.png").await.unwrap();
-    let ferris = load_texture("src/ferris.png").await.unwrap();
+    // Load assets
+    let assets = load_assets().await;
 
-    // Load the OBJ file with LoadOptions
-    let load_options = LoadOptions {
-        triangulate: true,
-        single_index: true,
-        ..Default::default()
-    };
-    let (models, _materials) = tobj::load_obj(&Path::new("src/obj/teapot.obj"), &load_options).expect("Failed to load OBJ file");
+    // Introduce a boolean variable to keep track of the toggle state
+    let mut draw_objects = true;
 
-    // Extract vertices from the first model (assuming the OBJ file contains only one model)
-    let mesh = &models[0].mesh;
-    let vertices: Vec<Vec3> = mesh.positions.chunks(3).map(|chunk| vec3(chunk[0], chunk[1], chunk[2])).collect();
 
     // Rotation angle
     let mut rotation_angle: f32 = 0.0;
@@ -41,6 +36,33 @@ async fn main() {
         if is_key_pressed(KeyCode::Escape) {
             break;
         }
+
+        // Check for the 'p' key press to toggle the draw_objects_flag variable
+        if is_key_pressed(KeyCode::P) {
+            draw_objects = !draw_objects;
+        }
+
+        // Handle other key presses
+        if is_key_pressed(KeyCode::W) {
+            println!("W key pressed");
+            // Add your logic for W key press here
+        }
+
+        if is_key_pressed(KeyCode::A) {
+            println!("A key pressed");
+            // Add your logic for A key press here
+        }
+
+        if is_key_pressed(KeyCode::S) {
+            println!("S key pressed");
+            // Add your logic for S key press here
+        }
+
+        if is_key_pressed(KeyCode::D) {
+            println!("D key pressed");
+            // Add your logic for D key press here
+        }
+
 
         clear_background(consts::FSBLUE);
 
@@ -54,43 +76,14 @@ async fn main() {
 
         draw_grid(20, 1., GRAY, WHITE);
 
-        draw_cube_wires(vec3(0., 1., -6.), vec3(2., 2., 2.), DARKGREEN);
-        draw_cube_wires(vec3(0., 1., 6.), vec3(2., 2., 2.), DARKBLUE);
-        draw_cube_wires(vec3(2., 1., 2.), vec3(2., 2., 2.), YELLOW);
-
-        draw_plane(vec3(-8., 0., -8.), vec2(5., 5.), Some(&ferris), WHITE);
-
-        draw_cube(
-            vec3(-5., 1., -2.),
-            vec3(2., 2., 2.),
-            Some(&rust_logo),
-            WHITE,
-        );
-        draw_cube(vec3(-5., 1., 2.), vec3(2., 2., 2.), Some(&ferris), WHITE);
-
-        // Create a rotation matrix
-        let rotation_matrix = Mat4::from_rotation_y(rotation_angle.to_radians());
-
-        // Create a translation matrix
-        let translation_matrix = Mat4::from_translation(vec3(5.0, 0.0, 0.0));
-
-        // Combine the rotation and translation matrices
-        let transformation_matrix = translation_matrix * rotation_matrix;
-
-        // Draw the OBJ model with rotation and translation
-        for i in (0..mesh.indices.len()).step_by(3) {
-            let idx0 = mesh.indices[i] as usize;
-            let idx1 = mesh.indices[i + 1] as usize;
-            let idx2 = mesh.indices[i + 2] as usize;
-
-            let v0 = transformation_matrix.transform_point3(vertices[idx0]);
-            let v1 = transformation_matrix.transform_point3(vertices[idx1]);
-            let v2 = transformation_matrix.transform_point3(vertices[idx2]);
-
-            draw_line_3d(v0, v1, BLACK);
-            draw_line_3d(v1, v2, BLACK);
-            draw_line_3d(v2, v0, BLACK);
+        // Conditionally draw the objects based on the value of draw_objects
+        if draw_objects {
+            draw_objects::draw_objects(&assets.rust_logo, &assets.ferris).await;
         }
+
+        // Draw the models
+        draw_models(rotation_angle, &assets.vertices1, &assets.vertices2, &assets.mesh1, &assets.mesh2);
+
 
         // Increment the rotation angle
         rotation_angle += 1.0;

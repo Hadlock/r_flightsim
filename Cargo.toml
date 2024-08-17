@@ -1,6 +1,6 @@
 [package]
 name = "r_flightsim"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 
 [dependencies]
@@ -11,6 +11,7 @@ macroquad = { version="0.4.12", default-features=false }
 #macroquad-profiler = "0.1.1" # https://not-fl3.github.io/platformer-book/profiling.html
 #egui_demo_lib = "0.21.0"
 tobj = "4.0.2"
+rand = "0.8.4"
 
 [features]
 default = ["audio"]

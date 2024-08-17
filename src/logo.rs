@@ -1,4 +1,6 @@
-pub fn logo() {
+use rand::Rng;
+
+pub fn logo1() {
     println!("---- r_flightsim Start ----");
     let flightsim = r"
     ┌───────────────────────────────────────────────────────────────────┐
@@ -112,4 +114,16 @@ pub fn dc3_logo2() {
                                                                                    ▓▓▓▓██████▓                                                                                                                              
 ";
 println!("{}", flightsim);
+}
+
+pub fn logo() {
+  let mut rng = rand::thread_rng();
+  let choice = rng.gen_range(0..3);
+
+  match choice {
+      0 => logo1(),
+      1 => dc3_logo(),
+      2 => dc3_logo2(),
+      _ => unreachable!(),
+  }
 }
