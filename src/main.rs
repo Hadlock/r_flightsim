@@ -1,11 +1,11 @@
 mod consts;
 mod logo;
 mod draw_objects;
-mod load_assets;
 mod draw_models;
+mod load_assets;
 
+use load_assets::{Assets, BoundingBox, calculate_aabb, check_collision};
 use macroquad::prelude::*;
-use load_assets::load_assets;
 use draw_models::draw_models;
 
 fn conf() -> Conf {
@@ -23,7 +23,7 @@ async fn main() {
     logo::logo(); 
 
     // Load assets
-    let assets = load_assets().await;
+    let assets = load_assets::load_assets().await;
 
     // Introduce a boolean variable to keep track of the toggle state
     let mut draw_objects = true;
@@ -74,16 +74,21 @@ async fn main() {
             ..Default::default()
         });
 
+        
         draw_grid(20, 1., GRAY, WHITE);
-
+        
         // Conditionally draw the objects based on the value of draw_objects
         if draw_objects {
             draw_objects::draw_objects(&assets.rust_logo, &assets.ferris).await;
         }
-
+        
         // Draw the models
         draw_models(rotation_angle, &assets.vertices1, &assets.vertices2, &assets.mesh1, &assets.mesh2);
-
+        
+        draw_text("First Person Camera", 10.0, 20.0, 30.0, WHITE);
+        if check_collision(&assets.bbox1, &assets.bbox2) {
+            println!("Collision detected!");
+        }
 
         // Increment the rotation angle
         rotation_angle += 1.0;

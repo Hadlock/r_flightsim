@@ -1,12 +1,11 @@
 use macroquad::prelude::*;
-use tobj::Mesh;
 
 pub fn draw_models(
     rotation_angle: f32,
     vertices1: &[Vec3],
     vertices2: &[Vec3],
-    mesh1: &Mesh,
-    mesh2: &Mesh,
+    mesh1: &tobj::Mesh,
+    mesh2: &tobj::Mesh,
 ) {
     // Create a rotation matrix
     let rotation_matrix = Mat4::from_rotation_y(rotation_angle.to_radians());
