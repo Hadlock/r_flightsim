@@ -3,6 +3,7 @@ mod logo;
 mod draw_objects;
 mod draw_models;
 mod load_assets;
+use macroquad::{telemetry}; 
 
 use load_assets::{Assets, BoundingBox, calculate_aabb, check_collision};
 use macroquad::prelude::*;
@@ -27,14 +28,24 @@ async fn main() {
 
     // Introduce a boolean variable to keep track of the toggle state
     let mut draw_objects = true;
+    let mut gridspacing = 1.0;
+
+    let mut position = vec3(0.0, 1.0, 0.0); //camera position
 
 
     // Rotation angle
     let mut rotation_angle: f32 = 0.0;
 
+
+
     loop {
         if is_key_pressed(KeyCode::Escape) {
             break;
+        }
+        if is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl) {
+            if is_key_pressed(KeyCode::C) {
+                break;
+            }
         }
 
         // Check for the 'p' key press to toggle the draw_objects_flag variable
@@ -75,16 +86,27 @@ async fn main() {
         });
 
         
-        draw_grid(20, 1., GRAY, WHITE);
+        if position[1] < 5.0 {
+            gridspacing = 1.0;
+        }
+        if position[1] > 5.0 {
+            gridspacing = 10.0;
+        }
+        if position[1] > 10.0 {
+            gridspacing = 20.0;
+        }
+        if position[1] > 30.0 {
+            gridspacing = 50.0;
+        }
+        draw_grid(100, 1., GRAY, WHITE);
         
         // Conditionally draw the objects based on the value of draw_objects
         if draw_objects {
             draw_objects::draw_objects(&assets.rust_logo, &assets.ferris).await;
         }
-        
         // Draw the models
         draw_models(rotation_angle, &assets.vertices1, &assets.vertices2, &assets.mesh1, &assets.mesh2);
-        
+
         draw_text("First Person Camera", 10.0, 20.0, 30.0, WHITE);
         if check_collision(&assets.bbox1, &assets.bbox2) {
             println!("Collision detected!");
@@ -92,7 +114,7 @@ async fn main() {
 
         // Increment the rotation angle
         rotation_angle += 1.0;
-
+        macroquad_profiler::profiler(Default::default());
         next_frame().await;
     }
 }
