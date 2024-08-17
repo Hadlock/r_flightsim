@@ -32,6 +32,8 @@ async fn main() {
 
     let assets = load_assets::load_assets().await; // Load assets
 
+    let sim_state = SimState::new();
+
     // Introduce a boolean variable to keep track of the toggle state
     let mut draw_objects = true;
     let mut gridspacing = 1.0;
