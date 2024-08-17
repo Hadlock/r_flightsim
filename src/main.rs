@@ -2,6 +2,7 @@ mod consts;
 mod logo;
 mod draw_objects;
 mod draw_models;
+mod grid;
 mod input_handling;
 mod load_assets;
 
@@ -25,8 +26,7 @@ fn conf() -> Conf {
 async fn main() {
     logo::logo(); 
 
-    // Load assets
-    let assets = load_assets::load_assets().await;
+    let assets = load_assets::load_assets().await; // Load assets
 
     // Introduce a boolean variable to keep track of the toggle state
     let mut draw_objects = true;
@@ -40,7 +40,7 @@ async fn main() {
     // ok, pulling in camera control stuff
     /* #region chad stuff */
     let mut gridspacing = 1.0;
-    let mut plane_position = vec3(0., 0.5, 0.);
+    let mut plane_position = vec3(-5.0, 0.0, 0.0);
     let mut throttle = false;
     let mut speed = 0.0;
     /* #endregion */
@@ -104,45 +104,22 @@ async fn main() {
             ..Default::default()
         });
 
-        // grid
-        if position[1] < 5.0 {
-            gridspacing = 1.0;
-        }
-        if position[1] > 5.0 {
-            gridspacing = 10.0;
-        }
-        if position[1] > 10.0 {
-            gridspacing = 20.0;
-        }
-        if position[1] > 30.0 {
-            gridspacing = 50.0;
-        }
-        if position[1] > 70.0 {
-            gridspacing = 100.0;
-        }
-        draw_grid(100, gridspacing, GRAY, WHITE);
-        //end grid
+        grid::draw_grid_based_on_position(position[1]);
+
 
         // Conditionally draw the objects based on the value of draw_objects
         if draw_objects {
-            draw_objects::draw_objects(&assets.rust_logo, &assets.ferris).await;
+            draw_objects::draw_objects(&assets.rust_logo, &assets.ferris, plane_position).await;
         }
         // Draw the models
-        draw_models(rotation_angle, &assets.vertices1, &assets.vertices2, &assets.mesh1, &assets.mesh2);
+        draw_models(rotation_angle, &assets.vertices1, &assets.vertices2, &assets.mesh1, &assets.mesh2, plane_position);
 
         //draw_text("First Person Camera", 10.0, 20.0, 30.0, WHITE);
         if check_collision(&assets.bbox1, &assets.bbox2) {
             println!("Collision detected!");
         }
 
-        /* #region draw airplane */
-
-        fn draw_airplane(plane_position: Vec3, color: Color) {
-            draw_cube_wires(plane_position, vec3(1., 1., 1.), color); //position, size
-
-        }
-
-        draw_airplane(plane_position, ORANGE);
+        // region airplane throttle
         if throttle {
             speed += 0.01;
         };

@@ -6,6 +6,7 @@ pub fn draw_models(
     vertices2: &[Vec3],
     mesh1: &tobj::Mesh,
     mesh2: &tobj::Mesh,
+    plane_position: Vec3,
 ) {
     // Create a rotation matrix
     let rotation_matrix = Mat4::from_rotation_y(rotation_angle.to_radians());
@@ -38,7 +39,7 @@ pub fn draw_models(
     }
 
     // Create a translation matrix for the second model
-    let translation_matrix2 = Mat4::from_translation(vec3(-5.0, 0.0, 0.0));
+    let translation_matrix2 = Mat4::from_translation(plane_position);// (-5.0, 0.0, 0.0));
 
     // Create a scaling matrix for the second model
     let scaling_matrix2 = Mat4::from_scale(vec3(0.02, 0.02, 0.02));
@@ -50,7 +51,8 @@ pub fn draw_models(
     let rotation_matrix_z = Mat4::from_rotation_z(90.0_f32.to_radians());
 
     // Combine the scaling, rotation, and translation matrices for the second model
-    let transformation_matrix2 = translation_matrix2 * rotation_matrix * rotation_matrix_x * rotation_matrix_z * scaling_matrix2;
+    // let transformation_matrix2 = translation_matrix2 * rotation_matrix * rotation_matrix_x * rotation_matrix_z * scaling_matrix2;
+    let transformation_matrix2 = translation_matrix2 * rotation_matrix_x * rotation_matrix_z * scaling_matrix2;
 
     // Define a custom color for the second OBJ model
     let obj_color2 = BLUE;
