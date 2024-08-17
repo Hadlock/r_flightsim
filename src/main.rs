@@ -2,8 +2,10 @@ mod consts;
 mod logo;
 mod draw_objects;
 mod draw_models;
+mod input_handling;
 mod load_assets;
 
+use input_handling::handle_input;
 use load_assets::{Assets, BoundingBox, calculate_aabb, check_collision};
 use macroquad::prelude::*;
 use macroquad::{telemetry}; 
@@ -59,7 +61,7 @@ async fn main() {
     )
     .normalize();
     let mut right = front.cross(world_up).normalize();
-    let mut up;
+    let mut up = Default::default();
 
     let mut position = vec3(0.0, 1.0, 0.0); //camera position
     let mut last_mouse_position: Vec2 = mouse_position().into();
@@ -73,64 +75,23 @@ async fn main() {
     loop {
         let delta = get_frame_time();
 
-        /* #region keyboard input handling */
-        if is_key_pressed(KeyCode::Escape) {
-            break;
-        }
-        if is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl) {
-            if is_key_pressed(KeyCode::C) {
-                break;
-            }
-        }
-        if is_key_pressed(KeyCode::P) {
-            draw_objects = !draw_objects;
-        }
+        let mouse_position = handle_input(
+            &mut draw_objects,
+            &mut grabbed,
+            &mut position,
+            &mut last_mouse_position,
+            &mut yaw,
+            &mut pitch,
+            &mut front,
+            &mut right,
+            &mut up,
+            &mut x,
+            &mut switch,
+            bounds,
+            delta,
+            world_up,
+        );
 
-        if is_key_pressed(KeyCode::Tab) {
-            grabbed = !grabbed;
-            set_cursor_grab(grabbed);
-            show_mouse(!grabbed);
-        }
-        if is_key_down(KeyCode::W) {
-            position += front * consts::MOVE_SPEED;
-        }
-        if is_key_down(KeyCode::A) {
-            position -= right * consts::MOVE_SPEED;
-        }
-        if is_key_down(KeyCode::S) {
-            position -= front * consts::MOVE_SPEED;
-        }
-        if is_key_down(KeyCode::D) {
-            position += right * consts::MOVE_SPEED;
-        }
-
-        let mouse_position: Vec2 = mouse_position().into();
-        let mouse_delta = mouse_position - last_mouse_position;
-        last_mouse_position = mouse_position;
-        /* #endregion */
-
-        /* #region mouse input handling */
-        yaw += mouse_delta.x * delta * consts::LOOK_SPEED;
-        pitch += mouse_delta.y * delta * -consts::LOOK_SPEED;
-
-        pitch = if pitch > 1.5 { 1.5 } else { pitch };
-        pitch = if pitch < -1.5 { -1.5 } else { pitch };
-
-        front = vec3(
-            yaw.cos() * pitch.cos(),
-            pitch.sin(),
-            yaw.sin() * pitch.cos(),
-        )
-        .normalize();
-
-        right = front.cross(world_up).normalize();
-        up = right.cross(front).normalize();
-
-        x += if switch { 0.04 } else { -0.04 };
-        if x >= bounds || x <= -bounds {
-            switch = !switch;
-        }
-        /* #endregion */
 
         clear_background(consts::FSBLUE);
 
@@ -218,6 +179,7 @@ async fn main() {
         /* #region draw text */
         draw_text("First Person Camera", 10.0, 20.0, 30.0, WHITE);
 
+    
         draw_text(
             format!("X: {} Y: {}", mouse_position.x, mouse_position.y).as_str(),
             10.0,
@@ -225,6 +187,7 @@ async fn main() {
             30.0,
             WHITE,
         );
+        
         draw_text(
             format!("Press <TAB> to toggle mouse grab: {}", grabbed).as_str(),
             10.0,
@@ -237,6 +200,6 @@ async fn main() {
         // Increment the rotation angle
         rotation_angle += 1.0;
         macroquad_profiler::profiler(Default::default());
-        next_frame().await;
+        next_frame().await; 
     }
 }
