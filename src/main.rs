@@ -5,12 +5,16 @@ mod draw_models;
 mod grid;
 mod input_handling;
 mod load_assets;
+mod sim_state;
 
+
+
+use draw_models::draw_models;
 use input_handling::handle_input;
 use load_assets::{Assets, BoundingBox, calculate_aabb, check_collision};
 use macroquad::prelude::*;
 use macroquad::{telemetry}; 
-use draw_models::draw_models;
+use sim_state::SimState;
 
 fn conf() -> Conf {
     Conf {
