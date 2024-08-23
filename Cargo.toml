@@ -1,35 +1,21 @@
 [package]
 name = "r_flightsim"
-version = "0.1.0"
-authors = ["Chad Hedstrom <chad.hedstrom@gmail.com>"]
-edition = "2018"
-
-[profile.dev]
-# suggested by ggez to improve dev performance
-# "optimize for speed" levels:
-#opt-level = 1
-#opt-level = 2
-#opt-level = 3
-
-[profile.release]
-# shrink release binary down to ~3MB
-# e.g. cargo build --release
-# then, strip ./RGraph/target/release/RGraph
-#opt-level = 1
-lto = true
-panic = 'abort'
+version = "0.7.0"
+edition = "2021"
 
 [dependencies]
-ggez = "0.5.1"
+#egui = "0.21.0"
+#egui-macroquad = "0.15.0"
+macroquad = { version="0.4.12", default-features=false }
+#macroquad = { version="0.3.25", default-features=false }
+macroquad-profiler = "0.2" # https://not-fl3.github.io/platformer-book/profiling.html
+#egui_demo_lib = "0.21.0"
+tobj = "4.0.2"
+rand = "0.8.4"
 
-# gui crap
-gfx_core = "0.9.2"
-gfx_device_gl = "0.16.2"
-image = "0.23.13"
-imgui = "0.1.0"
-imgui-gfx-renderer = "0.1.0"
+[features]
+default = ["audio"]
+audio = ["macroquad/audio"]
 
-# some boilerplate CLI stuff
-clap = "2.33.3"
-
-# probably logging
+[profile.release]
+opt-level = 2
