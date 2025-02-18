@@ -1,202 +1,107 @@
-mod consts;
-mod logo;
-mod draw_objects;
-mod draw_models;
-mod grid;
-mod input_handling;
-mod load_assets;
-mod sim_state;
-
-
-
-use draw_models::draw_models;
-use input_handling::handle_input;
-use load_assets::{Assets, BoundingBox, calculate_aabb, check_collision};
 use macroquad::prelude::*;
-use macroquad::{telemetry}; 
-use sim_state::SimState;
 
-fn conf() -> Conf {
-    Conf {
-        window_title: String::from("r_flightsim7"),
-        window_width: 1280,
-        window_height: 768,
-        fullscreen: false,
-        ..Default::default()
+struct Plane {
+    position: Vec3,
+    speed: f32,
+    heading: f32,
+    altitude: f32,
+    up_down: f32,
+    left_right: f32,
+    throttle: f32,
+}
+
+impl Plane {
+    fn new() -> Self {
+        Plane {
+            position: vec3(0.0, 0.0, 100.0),
+            speed: 0.0,
+            heading: 0.0,
+            altitude: 100.0,
+            up_down: 0.0,
+            left_right: 0.0,
+            throttle: 0.0,
+        }
+    }
+
+    fn update(&mut self, dt: f32) {
+        // Update position based on speed, heading, and throttle
+        self.position.x += self.speed * self.heading.cos() * dt;
+        self.position.y += self.speed * self.heading.sin() * dt;
+        self.position.z += self.up_down * dt;
+
+        // Update speed based on throttle
+        self.speed += self.throttle * dt;
+
+        // Update altitude
+        self.altitude = self.position.z;
+    }
+
+    fn handle_input(&mut self) {
+        if is_key_down(KeyCode::Up) {
+            self.up_down += 1.0;
+        }
+        if is_key_down(KeyCode::Down) {
+            self.up_down -= 1.0;
+        }
+        if is_key_down(KeyCode::Left) {
+            self.left_right += 1.0;
+        }
+        if is_key_down(KeyCode::Right) {
+            self.left_right -= 1.0;
+        }
+        if is_key_down(KeyCode::PageUp) {
+            self.throttle += 1.0;
+        }
+        if is_key_down(KeyCode::PageDown) {
+            self.throttle -= 1.0;
+        }
+        if is_key_down(KeyCode::Enter) {
+            self.left_right = 0.0;
+        }
     }
 }
 
-#[macroquad::main(conf)]
+#[macroquad::main("Flight Simulator")]
 async fn main() {
-    logo::logo(); 
-
-    let assets = load_assets::load_assets().await; // Load assets
-
-    let sim_state = SimState::new();
-
-    // Introduce a boolean variable to keep track of the toggle state
-    let mut draw_objects = true;
-    let mut gridspacing = 1.0;
-
-    let mut position = vec3(0.0, 1.0, 0.0); //camera position
-
-    // Rotation angle
-    let mut rotation_angle: f32 = 0.0;
-
-    // ok, pulling in camera control stuff
-    /* #region chad stuff */
-    let mut gridspacing = 1.0;
-    let mut plane_position = vec3(-5.0, 0.0, 0.0);
-    let mut throttle = false;
-    let mut speed = 0.0;
-    /* #endregion */
-
-    /* #region normal stuff */
-    let mut x = 0.0;
-    let mut switch = false;
-    let bounds = 8.0;
-
-    let world_up = vec3(0.0, 1.0, 0.0);
-    let mut yaw: f32 = 1.18;
-    let mut pitch: f32 = 0.0;
-
-    let mut front = vec3(
-        yaw.cos() * pitch.cos(),
-        pitch.sin(),
-        yaw.sin() * pitch.cos(),
-    )
-    .normalize();
-    let mut right = front.cross(world_up).normalize();
-    let mut up = Default::default();
-
-    let mut position = vec3(0.0, 1.0, 0.0); //camera position
-    let mut last_mouse_position: Vec2 = mouse_position().into();
-
-    let mut grabbed = true;
-    set_cursor_grab(grabbed);
-    show_mouse(false);
-    /* #endregion */
-
+    let mut plane = Plane::new();
 
     loop {
-        let delta = get_frame_time();
+        let dt = get_frame_time();
 
-        let mouse_position = handle_input(
-            &mut draw_objects,
-            &mut grabbed,
-            &mut position,
-            &mut last_mouse_position,
-            &mut yaw,
-            &mut pitch,
-            &mut front,
-            &mut right,
-            &mut up,
-            &mut x,
-            &mut switch,
-            &mut throttle,
-            bounds,
-            delta,
-            world_up,
-        );
+        // Handle input
+        plane.handle_input();
 
+        // Update plane state
+        plane.update(dt);
 
-        clear_background(consts::FSBLUE);
+        // Clear the screen
+        clear_background(BLACK);
 
-        // Going 3d!
-        set_camera(&Camera3D {
-            position: position,
-            up: up,
-            target: position + front,
-            ..Default::default()
-        });
-
-        grid::draw_grid_based_on_position(position[1]);
-
-
-        // Conditionally draw the objects based on the value of draw_objects
-        if draw_objects {
-            draw_objects::draw_objects(&assets.rust_logo, &assets.ferris, plane_position).await;
-        }
-        // Draw the models
-        draw_models(rotation_angle, &assets.vertices1, &assets.vertices2, &assets.mesh1, &assets.mesh2, plane_position);
-
-        //draw_text("First Person Camera", 10.0, 20.0, 30.0, WHITE);
-        if check_collision(&assets.bbox1, &assets.bbox2) {
-            println!("Collision detected!");
-        }
-
-        // region airplane throttle
-        if throttle {
-            speed += 0.01;
-        };
-        if !throttle {
-            if speed > 0.0 {
-                speed -= 0.01;
-            }
-        }
-        /* #endregion */
-
-        /* #region handle airplane speed and direction */
-        if speed > 0.0 {
-            plane_position[0] += speed;
-        }
-
-        if is_key_down(KeyCode::Right) {
-            plane_position[2] += speed * 0.12;
-        }
-        if is_key_down(KeyCode::Left) {
-            plane_position[2] -= speed * 0.12;
-        }
-        if speed > 0.5 {
-            plane_position[1] += 0.5;
-        }
-        if speed < 0.5 {
-            if plane_position[1] > 0.0 {
-                plane_position[1] -= 1.0;
-            }
-        }
-        /* #endregion */
-
-        // Back to screen space, render some text
-
-        set_default_camera();
-
-        /* #region draw text */
-        draw_text("First Person Camera", 10.0, 20.0, 30.0, WHITE);
-
-    
+        // Draw the plane (simple representation)
         draw_text(
-            format!("X: {} Y: {}", mouse_position.x, mouse_position.y).as_str(),
-            10.0,
-            48.0 + 18.0,
-            30.0,
-            WHITE,
-        );
-        
-        draw_text(
-            format!("Press <TAB> to toggle mouse grab: {}", grabbed).as_str(),
-            10.0,
-            48.0 + 42.0,
-            30.0,
+            &format!(
+                "Position: x: {:.2}, y: {:.2}, z: {:.2}\nSpeed: {:.2} knots\nHeading: {:.2} degrees\nAltitude: {:.2} feet",
+                plane.position.x, plane.position.y, plane.position.z, plane.speed, plane.heading, plane.altitude
+            ),
+            20.0,
+            20.0,
+            20.0,
             WHITE,
         );
 
-        // Calculate the altitude via x-coordinate for the top right corner and draw the text
-        let altitude = position[1].round();
-        let text = if altitude > 18000.0 {
-            // do crazy flight level stuff to be fancy
-            format!("FL{:03}", (altitude / 100.0).round() as i32)
-        } else {
-            format!("alt: {}", altitude)
-        };
-        let x = screen_width() - measure_text(&text, None, 30, 1.0).width - 10.0;
-        draw_text(&text, x, 20.0, 30.0, WHITE);   
+        // Draw HUD
+        draw_text(
+            &format!(
+                "Speed: {:.2} knots\nHeading: {:.2} degrees\nAltitude: {:.2} feet",
+                plane.speed, plane.heading, plane.altitude
+            ),
+            20.0,
+            screen_height() - 60.0,
+            20.0,
+            WHITE,
+        );
 
-        /* #endregion */
-
-        // Increment the rotation angle
-        rotation_angle += 1.0;
-        macroquad_profiler::profiler(Default::default());
-        next_frame().await; 
+        // Next frame
+        next_frame().await;
     }
 }
