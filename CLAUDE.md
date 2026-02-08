@@ -1,356 +1,190 @@
-# CLAUDE.md — Physics System + ECEF/ENU Coordinate System
+# CLAUDE.md — Fix Mouselook, Add Console Telemetry, Plan HUD
 
-## Context
-We have a working wgpu wireframe renderer with Sobel edge detection (see existing src/).
-This task adds a physics simulation loop and migrates from flat-earth XYZ to WGS-84 ECEF with ENU local frames.
+## Problem 1: Mouse Look is Broken
 
-## Existing Code — Do Not Break
-- `main.rs` — winit event loop, wgpu init
-- `renderer.rs` — two-pass Sobel edge detection pipeline
-- `camera.rs` — fly camera with mouse look
-- `scene.rs` — SceneObject with DVec3 world_pos, Quat rotation
-- `obj_loader.rs` — OBJ loading with smooth normals
-- `shaders/` — geometry.wgsl, edge_detect.wgsl
+### What's happening
+In `main.rs` RedrawRequested, the view matrix comes from `sim::aircraft_view_matrix(render_state.orientation)` which is purely the aircraft body orientation. The camera's yaw/pitch from mouse input (computed in `camera.rs`) is never incorporated into the view.
 
-The renderer, shaders, and obj_loader should not be modified. Changes go into main.rs (event loop), camera.rs (position updates), scene.rs (SceneObject fields), and new files.
-
-## New Files to Create
-
-### `src/coords.rs` — WGS-84 / ECEF / ENU conversions
-### `src/physics.rs` — Physics state, 6-DOF rigid body, simulation step
-### `src/sim.rs` — Top-level simulation orchestrator (the frame loop)
-
-## WGS-84 / ECEF / ENU — `coords.rs`
-
-Use f64 everywhere for world coordinates. No external crates — implement the math directly.
-
-### Constants
-```rust
-const WGS84_A: f64 = 6_378_137.0;              // semi-major axis (m)
-const WGS84_F: f64 = 1.0 / 298.257_223_563;    // flattening
-const WGS84_B: f64 = WGS84_A * (1.0 - WGS84_F); // semi-minor axis
-const WGS84_E2: f64 = 1.0 - (WGS84_B * WGS84_B) / (WGS84_A * WGS84_A); // first eccentricity squared
-```
-
-### Types
-```rust
-/// Geodetic position: latitude (rad), longitude (rad), altitude above ellipsoid (m)
-pub struct LLA {
-    pub lat: f64,
-    pub lon: f64,
-    pub alt: f64,
-}
-
-/// East-North-Up rotation matrix at a given lat/lon.
-/// Columns are the ENU axes expressed in ECEF.
-pub struct ENUFrame {
-    pub east: DVec3,
-    pub north: DVec3,
-    pub up: DVec3,
-    pub origin_ecef: DVec3,
-}
-```
-
-### Required Functions
-```rust
-/// Geodetic (lat/lon/alt) to ECEF XYZ
-pub fn lla_to_ecef(lla: &LLA) -> DVec3
-
-/// ECEF XYZ to geodetic. Use Bowring's iterative method (2-3 iterations sufficient).
-pub fn ecef_to_lla(ecef: DVec3) -> LLA
-
-/// Compute the ENU frame at a given lat/lon
-pub fn enu_frame_at(lat_rad: f64, lon_rad: f64, origin_ecef: DVec3) -> ENUFrame
-
-/// Convert a vector from ENU to ECEF (rotation only, no translation)
-impl ENUFrame {
-    pub fn enu_to_ecef(&self, enu: DVec3) -> DVec3
-    pub fn ecef_to_enu(&self, ecef: DVec3) -> DVec3
-}
-```
-
-### ENU Axes from lat/lon (the core math)
-```rust
-fn enu_axes(lat: f64, lon: f64) -> (DVec3, DVec3, DVec3) {
-    let (slat, clat) = lat.sin_cos();
-    let (slon, clon) = lon.sin_cos();
-
-    let east  = DVec3::new(-slon,        clon,        0.0);
-    let north = DVec3::new(-slat * clon, -slat * slon, clat);
-    let up    = DVec3::new( clat * clon,  clat * slon, slat);
-
-    (east, north, up)
-}
-```
-
-### Unit Tests for coords.rs
-Include tests that verify:
-- `lla_to_ecef` → `ecef_to_lla` round-trips within 1mm for several known points
-- SFO (37.613931, -122.358089, 0.0) produces a sane ECEF position (~4.6M, ~-2.5M, ~3.9M meters)
-- ENU axes at equator/prime meridian: east=(0,1,0), north=(0,0,1), up=(1,0,0)
-- ENU axes at north pole: up=(0,0,1)
-
----
-
-## Physics System — `physics.rs`
-
-### Simulation Frame Loop
-Every physics tick follows this exact order:
+### Fix: Layer head rotation on top of aircraft orientation
+The pilot can look around inside the cockpit. The view matrix should be:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  ORDER OF OPERATIONS (per tick)                              │
-├─────────────────────────────────────────────────────────────┤
-│  1. Input          — read control surfaces, throttle         │
-│  2. Environment    — atmosphere model at current alt         │
-│  3. Aerodynamics   — forces/moments from airspeed + AoA     │
-│  4. Engine         — thrust from throttle + atmosphere       │
-│  5. Flight Control — autopilot / FBW corrections (stub)      │
-│  6. Systems        — hydraulics, electrical (stub)           │
-│  7. Integration    — RK4 on 6-DOF state                     │
-│  8. Ground         — gear contact, friction, normal force    │
-│  9. (Render is separate, not in physics tick)                │
-└─────────────────────────────────────────────────────────────┘
+view = head_rotation * aircraft_body_view
 ```
 
-### Physics runs at fixed timestep
-- `PHYSICS_HZ: f64 = 120.0` (120 ticks/sec)
-- `PHYSICS_DT: f64 = 1.0 / 120.0`
-- Use accumulator pattern in the main loop: accumulate wall-clock dt, step physics in fixed increments, render with interpolated state
+Where head_rotation is the mouse-look yaw/pitch relative to the aircraft's forward direction.
 
-### Rigid Body State
-All state is in ECEF. Physics computations happen in ENU.
+### Implementation
+
+**In `sim.rs`**, change `aircraft_view_matrix` to accept head yaw and pitch:
 
 ```rust
-pub struct RigidBody {
-    // -- ECEF state (source of truth) --
-    pub pos_ecef: DVec3,          // position in ECEF (m)
-    pub vel_ecef: DVec3,          // velocity in ECEF (m/s)
-    pub orientation: DQuat,       // body frame → ECEF rotation
-    pub angular_vel_body: DVec3,  // angular velocity in body frame (rad/s)
+/// Compute view matrix: aircraft orientation + pilot head look.
+/// head_yaw: radians, 0 = looking forward, positive = look right
+/// head_pitch: radians, 0 = level, positive = look up
+pub fn aircraft_view_matrix(orientation: DQuat, head_yaw: f64, head_pitch: f64) -> Mat4 {
+    // Aircraft body axes in ECEF
+    let body_fwd = orientation * DVec3::X;     // nose direction
+    let body_up = orientation * -DVec3::Z;     // body -Z = up (body Z = down)
+    let body_right = orientation * DVec3::Y;   // body Y = right
 
-    // -- Mass properties --
-    pub mass: f64,                // kg
-    pub inertia: DVec3,           // principal moments of inertia (kg·m²)
+    // Apply head yaw (rotate around body up axis)
+    let yaw_rot = DQuat::from_axis_angle(body_up, -head_yaw);
+    // Apply head pitch (rotate around body right axis)  
+    let pitch_rot = DQuat::from_axis_angle(body_right, head_pitch);
 
-    // -- Derived (recomputed each tick) --
-    pub lla: LLA,                 // current geodetic position
-    pub enu_frame: ENUFrame,      // ENU at current position
-    pub vel_enu: DVec3,           // velocity in ENU
-    pub groundspeed: f64,         // horizontal speed (m/s)
-    pub vertical_speed: f64,      // climb rate (m/s)
-    pub agl: f64,                 // altitude above ground (m) — just alt for now (flat terrain at 0)
+    let look_dir = yaw_rot * pitch_rot * body_fwd;
+    let up_dir = yaw_rot * pitch_rot * body_up;
+
+    let view = DMat4::look_at_rh(DVec3::ZERO, look_dir, up_dir);
+    let cols = view.to_cols_array();
+    Mat4::from_cols_array(&cols.map(|v| v as f32))
 }
 ```
 
-### Body Frame Convention
-- X = right (starboard wing)
-- Y = up (through canopy)
-- Z = forward (out the nose) — **this matters, be consistent**
-
-This means thrust acts along +Z body, lift along +Y body, gravity is -up in ENU converted to body frame.
-
-### Per-Tick Flow (implement as methods on a Simulation struct)
+**In `main.rs`**, pass camera yaw/pitch to the view matrix:
 
 ```rust
-pub struct Simulation {
-    pub aircraft: RigidBody,
-    pub controls: Controls,
-    pub atmosphere: Atmosphere,
-}
-
-pub struct Controls {
-    pub throttle: f64,      // 0.0 to 1.0
-    pub elevator: f64,      // -1.0 to 1.0 (nose down to nose up)
-    pub aileron: f64,       // -1.0 to 1.0 (roll left to roll right)
-    pub rudder: f64,        // -1.0 to 1.0 (yaw left to yaw right)
-}
+// In RedrawRequested:
+let view = sim::aircraft_view_matrix(
+    render_state.orientation,
+    state.camera.yaw,
+    state.camera.pitch,
+);
 ```
 
-#### Step 1: Input
-Read `Controls` from keyboard state. Map:
-- Up/Down arrows → elevator
-- Left/Right arrows → aileron
-- Z/X → rudder
-- Shift/Ctrl or +/- → throttle increment
+**In `main.rs`**, route mouse input to `camera.mouse_move()` again. Currently mouse motion events go to `state.camera.mouse_move(dx, dy)` in `device_event` — this is correct and should already work since cursor_grabbed gates it. Verify this path is intact.
 
-#### Step 2: Environment (stub for now)
-```rust
-pub struct Atmosphere {
-    pub density: f64,       // kg/m³ (sea level default: 1.225)
-    pub temperature: f64,   // K
-    pub pressure: f64,      // Pa
-    pub speed_of_sound: f64, // m/s
-}
-impl Atmosphere {
-    /// ISA standard atmosphere from altitude
-    pub fn at_altitude(alt_m: f64) -> Self { /* ISA model */ }
-}
-```
-
-#### Step 3: Aerodynamics (simplified)
-Compute forces and moments in body frame from airspeed vector, AoA, sideslip.
-For V1, use simple linear coefficients:
-```
-lift = 0.5 * rho * V² * S * CL(alpha)
-drag = 0.5 * rho * V² * S * CD(alpha)
-```
-Where `CL(alpha) = CL0 + CL_alpha * alpha` clamped to stall.
-Wing area S and coefficients should be configurable per aircraft.
-
-#### Step 4: Engine (simplified)
-```
-thrust = max_thrust * throttle * (density / 1.225)
-```
-Acts along body +Z axis.
-
-#### Step 5-6: Stubs
-```rust
-fn flight_control_system(&self, _controls: &Controls) -> Controls { /* passthrough */ }
-fn systems_update(&mut self) { /* no-op */ }
-```
-
-#### Step 7: Integration — RK4
-Integrate the 6-DOF state using RK4. State vector:
-- position (3) — integrated from velocity
-- velocity (3) — integrated from forces/mass
-- orientation (4, quaternion) — integrated from angular velocity
-- angular velocity (3) — integrated from moments/inertia
-
-**Critical: normalize the quaternion after each RK4 step.**
-
-The forces for RK4 are computed in ENU, then the integration updates ECEF state:
-1. Compute all forces in body frame
-2. Rotate to ENU using orientation
-3. Add gravity in ENU: `(0, 0, -9.80665 * mass)` — that's (E, N, U) so gravity is -U
-4. Convert total force from ENU to ECEF for integration
-5. Integrate pos_ecef and vel_ecef in ECEF
-6. Integrate orientation quaternion (body-frame angular vel)
-7. Recompute derived quantities (lla, enu_frame, etc.)
-
-#### Step 8: Ground Interaction
-Simple for now:
-- If `lla.alt < 0.0`, clamp to 0.0
-- Zero out downward velocity component (in ENU up direction)
-- Apply friction to horizontal velocity when on ground
-- Zero out angular velocities when on ground (crude but functional)
-
-### Gravity Direction
-Gravity = `-enu_frame.up * 9.80665` in ECEF. This is the ellipsoidal normal, which is correct for a flight sim (true gravity including geoid undulation is overkill).
-
----
-
-## Integrating with main.rs
-
-### Fixed Timestep with Interpolation
-```rust
-// In the main loop:
-let mut accumulator: f64 = 0.0;
-let mut prev_state: InterpolationState = ...;
-let mut curr_state: InterpolationState = ...;
-
-// Each frame:
-accumulator += dt;
-while accumulator >= PHYSICS_DT {
-    prev_state = curr_state.clone();
-    simulation.step(PHYSICS_DT);
-    curr_state = InterpolationState::from(&simulation);
-    accumulator -= PHYSICS_DT;
-}
-let alpha = accumulator / PHYSICS_DT;
-let render_state = InterpolationState::lerp(&prev_state, &curr_state, alpha);
-```
-
-### InterpolationState
-```rust
-struct InterpolationState {
-    pos_ecef: DVec3,
-    orientation: DQuat,
-}
-impl InterpolationState {
-    fn lerp(a: &Self, b: &Self, t: f64) -> Self {
-        Self {
-            pos_ecef: a.pos_ecef.lerp(b.pos_ecef, t),
-            orientation: a.orientation.slerp(b.orientation, t),
-        }
-    }
-}
-```
-
-### Camera follows aircraft
-- Camera position = aircraft pos_ecef + offset in body frame (e.g., pilot eye position)
-- Camera orientation = aircraft orientation (for now — cockpit view)
-- The existing camera-relative rendering in renderer.rs still works: subtract camera ECEF pos from each object's ECEF pos, cast to f32
-
-### SceneObject changes
-Update `scene.rs` so the aircraft SceneObject reads its `world_pos` and `rotation` from the `RigidBody` each frame. The other static objects keep their fixed positions. Convert `DQuat` orientation to `Quat` for the model matrix.
-
----
-
-## Initial Conditions — SFO Runway 28L
-
-Place the aircraft at:
-- Lat: 37.613931° N
-- Lon: -122.358089° W  
-- Alt: 0.0 m (on ellipsoid surface)
-- Heading: 280° true (runway 28L heading)
-- Speed: 0 m/s (starting stationary)
+**In `camera.rs`**, the yaw/pitch should represent head-relative angles, not world-absolute. Reset them to 0.0 in `Camera::new()` (already the case). Optionally clamp yaw to ±150° so the pilot can't look behind through their own skull:
 
 ```rust
-let lat = 37.613931_f64.to_radians();
-let lon = (-122.358089_f64).to_radians();
-let pos = lla_to_ecef(&LLA { lat, lon, alt: 0.0 });
-let enu = enu_frame_at(lat, lon, pos);
+pub fn mouse_move(&mut self, dx: f64, dy: f64) {
+    self.yaw -= dx * self.mouse_sensitivity;
+    self.pitch -= dy * self.mouse_sensitivity;
+    let pitch_limit = 89.0_f64.to_radians();
+    let yaw_limit = 150.0_f64.to_radians();
+    self.pitch = self.pitch.clamp(-pitch_limit, pitch_limit);
+    self.yaw = self.yaw.clamp(-yaw_limit, yaw_limit);
+}
+```
 
-// Heading 280° = 280° clockwise from north
-let hdg = 280.0_f64.to_radians();
-// Nose direction in ENU: north rotated by heading
-let nose_enu = DVec3::new(hdg.sin(), hdg.cos(), 0.0); // (E, N, U)
-let right_enu = DVec3::new(hdg.cos(), -hdg.sin(), 0.0);
-let up_enu = DVec3::new(0.0, 0.0, 1.0);
-
-// Convert body axes to ECEF to build orientation quaternion
-let nose_ecef = enu.enu_to_ecef(nose_enu);
-let right_ecef = enu.enu_to_ecef(right_enu);
-let up_ecef = enu.enu_to_ecef(up_enu);
-// Build rotation matrix [right, up, nose] (body X, Y, Z) in ECEF columns → DQuat
+**Key binding: press `C` to re-center head** (reset yaw/pitch to 0):
+Add to the key handler in main.rs:
+```rust
+KeyCode::KeyC => {
+    state.camera.yaw = 0.0;
+    state.camera.pitch = 0.0;
+}
 ```
 
 ---
 
-## Aircraft Parameters (Ki-61 Hien, approximate)
+## Problem 2: No Flight Data — Flying Blind
+
+### Immediate fix: Console telemetry
+Print flight state to stdout every 0.5 seconds. This is quick, no GPU text rendering needed.
+
+**Add to `sim.rs` SimRunner:**
 
 ```rust
-mass: 2_630.0,                    // kg (empty) — use for now
-wing_area: 20.0,                  // m²
-max_thrust: 8_500.0,              // N (~1,175 HP)
-inertia: DVec3::new(8_000.0, 25_000.0, 20_000.0), // rough estimates
-cl0: 0.2,
-cl_alpha: 5.0,                    // per radian
-cd0: 0.025,
-cd_alpha_sq: 0.04,                // CD = cd0 + cd_alpha_sq * alpha²
-stall_alpha: 0.28,                // ~16 degrees
+pub struct SimRunner {
+    // ... existing fields ...
+    telemetry_timer: f64,
+}
 ```
+
+Initialize `telemetry_timer: 0.0` in `SimRunner::new()`.
+
+**In `SimRunner::update()`**, after the physics loop:
+
+```rust
+self.telemetry_timer += dt;
+if self.telemetry_timer >= 0.5 {
+    self.telemetry_timer = 0.0;
+    self.print_telemetry();
+}
+```
+
+**Add telemetry method:**
+
+```rust
+fn print_telemetry(&self) {
+    let a = &self.sim.aircraft;
+    let lat = a.lla.lat.to_degrees();
+    let lon = a.lla.lon.to_degrees();
+    let alt_ft = a.lla.alt * 3.28084;
+    let gs_kts = a.groundspeed * 1.94384;
+    let vs_fpm = a.vertical_speed * 196.85;
+    let throttle_pct = self.sim.controls.throttle * 100.0;
+
+    // Heading from body forward in ENU
+    let nose_ecef = a.orientation * DVec3::X;
+    let nose_enu = a.enu_frame.ecef_to_enu(nose_ecef);
+    let hdg = nose_enu.x.atan2(nose_enu.y).to_degrees();
+    let hdg = if hdg < 0.0 { hdg + 360.0 } else { hdg };
+
+    // Pitch angle: body forward projected onto ENU up
+    let pitch_deg = nose_enu.z.asin().to_degrees();
+
+    // Bank angle: body right wing in ENU
+    let right_ecef = a.orientation * DVec3::Y;
+    let right_enu = a.enu_frame.ecef_to_enu(right_ecef);
+    let bank_deg = right_enu.z.asin().to_degrees();
+
+    println!(
+        "HDG:{:5.1}° PIT:{:+5.1}° BNK:{:+5.1}° | \
+         GS:{:5.1}kt VS:{:+6.0}fpm ALT:{:6.0}ft | \
+         THR:{:3.0}% | \
+         {:.4}°{} {:.4}°{}",
+        hdg, pitch_deg, bank_deg,
+        gs_kts, vs_fpm, alt_ft,
+        throttle_pct,
+        lat.abs(), if lat >= 0.0 { "N" } else { "S" },
+        lon.abs(), if lon >= 0.0 { "E" } else { "W" },
+    );
+}
+```
+
+This gives you output like:
+```
+HDG:280.0° PIT:+0.0° BNK:+0.0° | GS:  0.0kt VS:   +0fpm ALT:     0ft | THR:  0% | 37.6139°N 122.3581°W
+HDG:280.0° PIT:+0.0° BNK:+0.0° | GS: 15.3kt VS:   +0fpm ALT:     0ft | THR: 50% | 37.6139°N 122.3581°W
+```
+
+### Important: Use DVec3 import
+The telemetry method uses `DVec3` — make sure `glam::DVec3` is imported in `sim.rs` (it already is).
 
 ---
 
-## Style / Conventions
-- All world positions: `f64` / `DVec3` / `DQuat`
-- All GPU data: `f32` / `Vec3` / `Quat` (cast at render boundary only)
-- Angles internally in radians, display in degrees
-- No `unwrap()` on file I/O — use `expect()` with context
-- Comments explaining non-obvious physics
-- `cargo clippy` clean, no warnings
+## Summary of Changes
 
-## Build & Run
-```bash
-cargo run --release
-```
-Arrow keys fly the plane, throttle with Shift/Ctrl, mouse look if cursor grabbed.
+### Files to modify:
+1. **`sim.rs`**:
+   - Change `aircraft_view_matrix` signature to accept `head_yaw, head_pitch`
+   - Add `telemetry_timer` field to SimRunner
+   - Add `print_telemetry()` method
+   - Call telemetry in `update()`
 
-## Do NOT
-- Modify renderer.rs or shaders — rendering pipeline is done
-- Use any physics crate (nalgebra, rapier, etc.) — we implement our own
-- Use f32 for world state
-- Skip RK4 (no Euler integration — it will diverge)
-- Forget to normalize quaternions after integration
+2. **`main.rs`**:
+   - Pass `state.camera.yaw, state.camera.pitch` to `aircraft_view_matrix()`
+   - Add KeyCode::KeyC handler to reset camera yaw/pitch
+
+3. **`camera.rs`**:
+   - Add yaw clamp to ±150° in `mouse_move()`
+   - Remove all the WASD movement code from `update()` — camera no longer flies freely, it's locked to the aircraft. The `update()` method can be empty or removed entirely. Position is set by SimRunner.
+
+### Files NOT to modify:
+- `renderer.rs`
+- `obj_loader.rs`
+- `coords.rs`
+- `physics.rs`
+- `shaders/*`
+
+### Test:
+1. `cargo run --release`
+2. Click to grab cursor
+3. Move mouse — should look around cockpit
+4. Press C — snaps view forward
+5. Console should print telemetry every 0.5s
+6. Hold Shift to increase throttle, watch GS increase in telemetry
+7. Arrow keys should pitch/roll the aircraft

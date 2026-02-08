@@ -44,6 +44,7 @@ pub struct SimRunner {
     prev_state: InterpolationState,
     curr_state: InterpolationState,
     held_keys: HashSet<KeyCode>,
+    telemetry_timer: f64,
 }
 
 impl SimRunner {
@@ -55,6 +56,7 @@ impl SimRunner {
             prev_state: state.clone(),
             curr_state: state,
             held_keys: HashSet::new(),
+            telemetry_timer: 0.0,
         }
     }
 
@@ -82,6 +84,12 @@ impl SimRunner {
             self.curr_state = InterpolationState::from_sim(&self.sim);
             self.accumulator -= PHYSICS_DT;
         }
+
+        self.telemetry_timer += dt;
+        if self.telemetry_timer >= 0.5 {
+            self.telemetry_timer = 0.0;
+            self.print_telemetry();
+        }
     }
 
     /// Get interpolated state for smooth rendering between physics steps.
@@ -93,6 +101,42 @@ impl SimRunner {
     /// Camera ECEF position (pilot eye in world space).
     pub fn camera_position(&self, render_state: &InterpolationState) -> DVec3 {
         render_state.pos_ecef + render_state.orientation * PILOT_EYE_BODY
+    }
+
+    fn print_telemetry(&self) {
+        let a = &self.sim.aircraft;
+        let lat = a.lla.lat.to_degrees();
+        let lon = a.lla.lon.to_degrees();
+        let alt_ft = a.lla.alt * 3.28084;
+        let gs_kts = a.groundspeed * 1.94384;
+        let vs_fpm = a.vertical_speed * 196.85;
+        let throttle_pct = self.sim.controls.throttle * 100.0;
+
+        // Heading from body forward in ENU
+        let nose_ecef = a.orientation * DVec3::X;
+        let nose_enu = a.enu_frame.ecef_to_enu(nose_ecef);
+        let hdg = nose_enu.x.atan2(nose_enu.y).to_degrees();
+        let hdg = if hdg < 0.0 { hdg + 360.0 } else { hdg };
+
+        // Pitch angle: body forward projected onto ENU up
+        let pitch_deg = nose_enu.z.asin().to_degrees();
+
+        // Bank angle: body right wing in ENU
+        let right_ecef = a.orientation * DVec3::Y;
+        let right_enu = a.enu_frame.ecef_to_enu(right_ecef);
+        let bank_deg = right_enu.z.asin().to_degrees();
+
+        println!(
+            "HDG:{:5.1}\u{00b0} PIT:{:+5.1}\u{00b0} BNK:{:+5.1}\u{00b0} | \
+             GS:{:5.1}kt VS:{:+6.0}fpm ALT:{:6.0}ft | \
+             THR:{:3.0}% | \
+             {:.4}\u{00b0}{} {:.4}\u{00b0}{}",
+            hdg, pitch_deg, bank_deg,
+            gs_kts, vs_fpm, alt_ft,
+            throttle_pct,
+            lat.abs(), if lat >= 0.0 { "N" } else { "S" },
+            lon.abs(), if lon >= 0.0 { "E" } else { "W" },
+        );
     }
 
     fn update_controls(&mut self, dt: f64) {
@@ -131,14 +175,24 @@ fn key_axis(held: &HashSet<KeyCode>, pos_key: KeyCode, neg_key: KeyCode) -> f64 
 
 // --- View matrix from aircraft orientation ---
 
-/// Compute the camera-at-origin view matrix from aircraft orientation.
-/// Body frame: X=forward, Y=right, Z=down.
-/// View convention: camera looks along -Z, with +Y up.
-pub fn aircraft_view_matrix(orientation: DQuat) -> Mat4 {
-    let forward = orientation * DVec3::X;
-    // Body -Z = up (since body Z = down)
-    let up = orientation * DVec3::new(0.0, 0.0, -1.0);
-    let view = DMat4::look_at_rh(DVec3::ZERO, forward, up);
+/// Compute view matrix: aircraft orientation + pilot head look.
+/// head_yaw: radians, 0 = looking forward, positive = look right
+/// head_pitch: radians, 0 = level, positive = look up
+pub fn aircraft_view_matrix(orientation: DQuat, head_yaw: f64, head_pitch: f64) -> Mat4 {
+    // Aircraft body axes in ECEF
+    let body_fwd = orientation * DVec3::X;     // nose direction
+    let body_up = orientation * -DVec3::Z;     // body -Z = up (body Z = down)
+    let body_right = orientation * DVec3::Y;   // body Y = right
+
+    // Apply head yaw (rotate around body up axis)
+    let yaw_rot = DQuat::from_axis_angle(body_up, -head_yaw);
+    // Apply head pitch (rotate around body right axis)
+    let pitch_rot = DQuat::from_axis_angle(body_right, head_pitch);
+
+    let look_dir = yaw_rot * pitch_rot * body_fwd;
+    let up_dir = yaw_rot * pitch_rot * body_up;
+
+    let view = DMat4::look_at_rh(DVec3::ZERO, look_dir, up_dir);
     let cols = view.to_cols_array();
     Mat4::from_cols_array(&cols.map(|v| v as f32))
 }

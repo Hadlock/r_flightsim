@@ -221,6 +221,10 @@ impl ApplicationHandler for App {
                                 .set_fullscreen(Some(Fullscreen::Borderless(None)));
                         }
                     }
+                    KeyCode::KeyC => {
+                        state.camera.yaw = 0.0;
+                        state.camera.pitch = 0.0;
+                    }
                     _ => {
                         state.sim_runner.key_down(key);
                     }
@@ -263,8 +267,12 @@ impl ApplicationHandler for App {
                 // Update camera position to pilot eye
                 state.camera.position = state.sim_runner.camera_position(&render_state);
 
-                // View matrix from aircraft orientation
-                let view = sim::aircraft_view_matrix(render_state.orientation);
+                // View matrix from aircraft orientation + pilot head look
+                let view = sim::aircraft_view_matrix(
+                    render_state.orientation,
+                    state.camera.yaw,
+                    state.camera.pitch,
+                );
                 let proj = state.camera.projection_matrix();
 
                 // Update aircraft SceneObject from physics
