@@ -1,190 +1,313 @@
-# CLAUDE.md — Fix Mouselook, Add Console Telemetry, Plan HUD
+# CLAUDE.md — Ground Contact Model
 
-## Problem 1: Mouse Look is Broken
+## Problem
+The current ground check in `physics.rs` only clamps altitude and zeros downward velocity. This causes:
+1. Aircraft pitches nose up on its own at ~110kt because lift exceeds weight but there's no normal force to prevent rotation
+2. Orientation is unconstrained on the ground — the plane can pitch/roll freely while wheels are on the runway
+3. No proper weight-on-wheels normal force, just a velocity clamp
 
-### What's happening
-In `main.rs` RedrawRequested, the view matrix comes from `sim::aircraft_view_matrix(render_state.orientation)` which is purely the aircraft body orientation. The camera's yaw/pitch from mouse input (computed in `camera.rs`) is never incorporated into the view.
+## Goal
+Replace the crude ground clamp with a spring-damper landing gear model that provides:
+- Normal force opposing gravity when on ground (weight on wheels)
+- Pitch/roll constraint from gear geometry (3-point contact: nose gear + two mains)
+- Proper takeoff rotation: pilot must use elevator at sufficient speed to rotate
+- Realistic ground roll friction (rolling + braking)
+- Nosewheel steering via rudder input
 
-### Fix: Layer head rotation on top of aircraft orientation
-The pilot can look around inside the cockpit. The view matrix should be:
+## Changes — All in `physics.rs`
 
-```
-view = head_rotation * aircraft_body_view
-```
+### 1. Add Landing Gear Geometry to AircraftParams
 
-Where head_rotation is the mouse-look yaw/pitch relative to the aircraft's forward direction.
-
-### Implementation
-
-**In `sim.rs`**, change `aircraft_view_matrix` to accept head yaw and pitch:
+Add gear contact points in body frame (X=forward, Y=right, Z=down).
+Ki-61 is a taildragger (two main gear + tail wheel):
 
 ```rust
-/// Compute view matrix: aircraft orientation + pilot head look.
-/// head_yaw: radians, 0 = looking forward, positive = look right
-/// head_pitch: radians, 0 = level, positive = look up
-pub fn aircraft_view_matrix(orientation: DQuat, head_yaw: f64, head_pitch: f64) -> Mat4 {
-    // Aircraft body axes in ECEF
-    let body_fwd = orientation * DVec3::X;     // nose direction
-    let body_up = orientation * -DVec3::Z;     // body -Z = up (body Z = down)
-    let body_right = orientation * DVec3::Y;   // body Y = right
-
-    // Apply head yaw (rotate around body up axis)
-    let yaw_rot = DQuat::from_axis_angle(body_up, -head_yaw);
-    // Apply head pitch (rotate around body right axis)  
-    let pitch_rot = DQuat::from_axis_angle(body_right, head_pitch);
-
-    let look_dir = yaw_rot * pitch_rot * body_fwd;
-    let up_dir = yaw_rot * pitch_rot * body_up;
-
-    let view = DMat4::look_at_rh(DVec3::ZERO, look_dir, up_dir);
-    let cols = view.to_cols_array();
-    Mat4::from_cols_array(&cols.map(|v| v as f32))
+pub struct GearContact {
+    pub pos_body: DVec3,      // attachment point in body frame
+    pub spring_k: f64,        // spring constant (N/m)
+    pub damping: f64,         // damping coefficient (N·s/m)
+    pub rolling_friction: f64, // rolling friction coefficient
+    pub braking_friction: f64, // braking friction coefficient
+    pub is_steerable: bool,   // does rudder input steer this wheel
 }
 ```
 
-**In `main.rs`**, pass camera yaw/pitch to the view matrix:
+Add to AircraftParams:
+```rust
+pub gear: Vec<GearContact>,
+```
+
+Ki-61 gear positions (approximate, in body frame X=fwd, Y=right, Z=down):
+```rust
+// Main gear: ~1m behind CG, 2m apart laterally, ~2m below CG
+// Tail wheel: ~5m behind CG, centerline, ~1.5m below CG
+gear: vec![
+    GearContact {  // Left main
+        pos_body: DVec3::new(-1.0, -2.0, 2.0),
+        spring_k: 50_000.0,
+        damping: 10_000.0,
+        rolling_friction: 0.03,
+        braking_friction: 0.5,
+        is_steerable: false,
+    },
+    GearContact {  // Right main
+        pos_body: DVec3::new(-1.0, 2.0, 2.0),
+        spring_k: 50_000.0,
+        damping: 10_000.0,
+        rolling_friction: 0.03,
+        braking_friction: 0.5,
+        is_steerable: false,
+    },
+    GearContact {  // Tail wheel
+        pos_body: DVec3::new(-5.0, 0.0, 1.5),
+        spring_k: 20_000.0,
+        damping: 5_000.0,
+        rolling_friction: 0.05,
+        braking_friction: 0.5,
+        is_steerable: true,
+    },
+],
+```
+
+### 2. Add Braking to Controls
 
 ```rust
-// In RedrawRequested:
-let view = sim::aircraft_view_matrix(
-    render_state.orientation,
-    state.camera.yaw,
-    state.camera.pitch,
+pub struct Controls {
+    pub throttle: f64,
+    pub elevator: f64,
+    pub aileron: f64,
+    pub rudder: f64,
+    pub brakes: f64,  // 0.0 to 1.0
+}
+```
+
+Map `KeyCode::KeyB` to brakes (hold = brake). Add to `sim.rs` update_controls:
+```rust
+c.brakes = if held.contains(&KeyCode::KeyB) { 1.0 } else { 0.0 };
+```
+
+### 3. Replace `ground_check()` with `compute_gear_forces()`
+
+Remove the existing `ground_check()` method entirely. Instead, compute gear forces as part of the force/moment calculation so they participate in RK4 integration properly.
+
+**Add this function and call it from `compute_forces_and_moments()`:**
+
+```rust
+/// Compute forces and moments from landing gear ground contact.
+/// Returns (force_ecef, moment_body) contribution from all gear.
+fn compute_gear_forces(
+    params: &AircraftParams,
+    state: &OdeState,
+    controls: &Controls,
+) -> (DVec3, DVec3) {
+    let q = state.orientation();
+    let lla = coords::ecef_to_lla(state.pos);
+    let enu = coords::enu_frame_at(lla.lat, lla.lon, state.pos);
+
+    let mut total_force_ecef = DVec3::ZERO;
+    let mut total_moment_body = DVec3::ZERO;
+
+    for gear in &params.gear {
+        // Gear contact point in ECEF
+        let gear_ecef = state.pos + q * gear.pos_body;
+        let gear_lla = coords::ecef_to_lla(gear_ecef);
+
+        // Compression: how far below ground the contact point is
+        // Positive compression = gear is touching/compressed
+        let compression = -gear_lla.alt;
+
+        if compression <= 0.0 {
+            continue; // wheel not touching ground
+        }
+
+        // Velocity of gear contact point in ECEF
+        // v_contact = v_cg + omega_body × r_body (transformed to ECEF)
+        let omega_cross_r = state.omega.cross(gear.pos_body);
+        let v_contact_ecef = state.vel + q * omega_cross_r;
+
+        // Vertical velocity of contact point (in ENU up direction)
+        let v_contact_enu = enu.ecef_to_enu(v_contact_ecef);
+        let v_vertical = v_contact_enu.z; // positive = moving up
+
+        // --- Normal force (spring-damper, only pushes up) ---
+        let normal_mag = (gear.spring_k * compression - gear.damping * v_vertical).max(0.0);
+        let normal_force_ecef = enu.up * normal_mag;
+
+        // --- Friction force (opposes horizontal velocity) ---
+        let v_horizontal_enu = DVec3::new(v_contact_enu.x, v_contact_enu.y, 0.0);
+        let h_speed = v_horizontal_enu.length();
+
+        let mut friction_force_ecef = DVec3::ZERO;
+        if h_speed > 0.01 {
+            // Friction coefficient: blend rolling and braking
+            let mu = gear.rolling_friction
+                + (gear.braking_friction - gear.rolling_friction) * controls.brakes;
+
+            let friction_mag = mu * normal_mag;
+            let friction_dir_enu = -v_horizontal_enu / h_speed;
+
+            // Steerable gear: add lateral force from rudder
+            // (rudder deflects the wheel, creating a side force)
+            let mut friction_enu = friction_dir_enu * friction_mag;
+            if gear.is_steerable {
+                // Rudder input creates a lateral force proportional to forward speed
+                let steer_angle = controls.rudder * 0.3; // max 17° steer
+                let body_right_enu = enu.ecef_to_enu(q * DVec3::Y);
+                // Lateral force from steering: sideways component
+                friction_enu += body_right_enu * steer_angle * normal_mag * 0.3;
+            }
+
+            friction_force_ecef = enu.enu_to_ecef(friction_enu);
+        }
+
+        // Total force from this gear leg
+        let gear_force_ecef = normal_force_ecef + friction_force_ecef;
+        total_force_ecef += gear_force_ecef;
+
+        // Moment about CG from this gear leg (in body frame)
+        // torque = r × F, where r is gear position relative to CG (body frame)
+        // F needs to be in body frame too
+        let gear_force_body = q.conjugate() * gear_force_ecef;
+        let moment = gear.pos_body.cross(gear_force_body);
+        total_moment_body += moment;
+    }
+
+    (total_force_ecef, total_moment_body)
+}
+```
+
+### 4. Integrate Gear Forces into `compute_forces_and_moments()`
+
+In the existing `compute_forces_and_moments()` function, **add gear forces** after the gravity calculation:
+
+```rust
+// ... existing code: aero forces, thrust, gravity ...
+
+// Landing gear ground contact
+let (gear_force_ecef, gear_moment_body) = compute_gear_forces(params, state, controls);
+
+ForcesAndMoments {
+    force_ecef: force_ecef_aero + gravity_ecef + gear_force_ecef,
+    moment_body: moment_body + gear_moment_body,
+}
+```
+
+### 5. Remove `ground_check()` from `Simulation::step()`
+
+The step method should now be simply:
+```rust
+pub fn step(&mut self, dt: f64) {
+    self.integrate_rk4(dt);
+    self.aircraft.update_derived();
+    self.atmosphere = Atmosphere::at_altitude(self.aircraft.lla.alt.max(0.0));
+}
+```
+
+No more post-integration clamping. The gear spring forces handle everything through proper physics.
+
+### 6. Safety Clamp (keep as backup)
+
+Add a minimal altitude safety clamp ONLY to prevent numerical explosion if the gear springs can't keep up (shouldn't happen with proper spring constants, but good safety net):
+
+```rust
+// At end of step(), after update_derived():
+if self.aircraft.lla.alt < -5.0 {
+    // Something went very wrong — emergency clamp
+    log::warn!("Aircraft below -5m, emergency clamp");
+    let clamped = LLA {
+        lat: self.aircraft.lla.lat,
+        lon: self.aircraft.lla.lon,
+        alt: 0.0,
+    };
+    self.aircraft.pos_ecef = coords::lla_to_ecef(&clamped);
+    self.aircraft.vel_ecef = DVec3::ZERO;
+    self.aircraft.angular_vel_body = DVec3::ZERO;
+    self.aircraft.update_derived();
+}
+```
+
+### 7. Add `on_ground` flag to RigidBody
+
+Useful for telemetry and future logic:
+
+```rust
+pub struct RigidBody {
+    // ... existing fields ...
+    pub on_ground: bool,  // true if any gear is compressed
+}
+```
+
+Set it during `update_derived()` or after gear force computation. Simplest approach: check if `lla.alt < 3.0` (approximate gear height). Or better: add a method that checks gear compression:
+
+```rust
+impl RigidBody {
+    pub fn check_on_ground(&mut self, gear: &[GearContact]) {
+        self.on_ground = gear.iter().any(|g| {
+            let gear_ecef = self.pos_ecef + self.orientation * g.pos_body;
+            let gear_lla = coords::ecef_to_lla(gear_ecef);
+            gear_lla.alt < 0.0
+        });
+    }
+}
+```
+
+Call after `update_derived()` in `step()`.
+
+### 8. Update Telemetry in `sim.rs`
+
+Add weight-on-wheels and brakes to the telemetry output:
+
+```rust
+let wow = if a.on_ground { "GND" } else { "AIR" };
+let brk = if self.sim.controls.brakes > 0.0 { "BRK" } else { "   " };
+
+println!(
+    "HDG:{:5.1}° PIT:{:+5.1}° BNK:{:+5.1}° | \
+     GS:{:5.1}kt VS:{:+6.0}fpm ALT:{:6.0}ft | \
+     THR:{:3.0}% {} {} | \
+     {:.4}°{} {:.4}°{}",
+    hdg, pitch_deg, bank_deg,
+    gs_kts, vs_fpm, alt_ft,
+    throttle_pct, wow, brk,
+    lat.abs(), if lat >= 0.0 { "N" } else { "S" },
+    lon.abs(), if lon >= 0.0 { "E" } else { "W" },
 );
 ```
 
-**In `main.rs`**, route mouse input to `camera.mouse_move()` again. Currently mouse motion events go to `state.camera.mouse_move(dx, dy)` in `device_event` — this is correct and should already work since cursor_grabbed gates it. Verify this path is intact.
+## Expected Behavior After Changes
 
-**In `camera.rs`**, the yaw/pitch should represent head-relative angles, not world-absolute. Reset them to 0.0 in `Camera::new()` (already the case). Optionally clamp yaw to ±150° so the pilot can't look behind through their own skull:
+1. **Stationary on ground**: Gear springs support aircraft weight, nose points slightly up (taildragger attitude ~10° nose up), aircraft sits still
+2. **Throttle up, taxi**: Aircraft accelerates forward, stays on ground, rolling friction provides mild deceleration
+3. **Approaching rotation speed (~80-90kt)**: Elevator input can raise the nose. Without elevator, aircraft stays on ground — the tail wheel and main gear geometry prevent spontaneous pitch-up
+4. **Rotation and liftoff**: Pull back on elevator, nose pitches up, AoA increases, when lift > weight the gear unloads and aircraft flies
+5. **Landing**: Descend toward ground, gear springs absorb impact, friction decelerates
+6. **Brakes (B key)**: High friction on ground for stopping
 
-```rust
-pub fn mouse_move(&mut self, dx: f64, dy: f64) {
-    self.yaw -= dx * self.mouse_sensitivity;
-    self.pitch -= dy * self.mouse_sensitivity;
-    let pitch_limit = 89.0_f64.to_radians();
-    let yaw_limit = 150.0_f64.to_radians();
-    self.pitch = self.pitch.clamp(-pitch_limit, pitch_limit);
-    self.yaw = self.yaw.clamp(-yaw_limit, yaw_limit);
-}
-```
+## What This Fixes
+- No more spontaneous pitch-up at 110kt
+- No more unconstrained orientation on ground
+- Proper takeoff requires pilot elevator input
+- Landing is survivable (spring-damper absorbs impact)
+- Taildragger ground attitude (slight nose-up)
 
-**Key binding: press `C` to re-center head** (reset yaw/pitch to 0):
-Add to the key handler in main.rs:
-```rust
-KeyCode::KeyC => {
-    state.camera.yaw = 0.0;
-    state.camera.pitch = 0.0;
-}
-```
+## Files Modified
+- `physics.rs` — gear model, force integration, remove old ground_check
+- `sim.rs` — brake key binding, telemetry update
 
----
+## Files NOT Modified
+- `renderer.rs`, `shaders/*`, `obj_loader.rs`, `coords.rs`, `camera.rs`, `main.rs`, `scene.rs`
 
-## Problem 2: No Flight Data — Flying Blind
-
-### Immediate fix: Console telemetry
-Print flight state to stdout every 0.5 seconds. This is quick, no GPU text rendering needed.
-
-**Add to `sim.rs` SimRunner:**
-
-```rust
-pub struct SimRunner {
-    // ... existing fields ...
-    telemetry_timer: f64,
-}
-```
-
-Initialize `telemetry_timer: 0.0` in `SimRunner::new()`.
-
-**In `SimRunner::update()`**, after the physics loop:
-
-```rust
-self.telemetry_timer += dt;
-if self.telemetry_timer >= 0.5 {
-    self.telemetry_timer = 0.0;
-    self.print_telemetry();
-}
-```
-
-**Add telemetry method:**
-
-```rust
-fn print_telemetry(&self) {
-    let a = &self.sim.aircraft;
-    let lat = a.lla.lat.to_degrees();
-    let lon = a.lla.lon.to_degrees();
-    let alt_ft = a.lla.alt * 3.28084;
-    let gs_kts = a.groundspeed * 1.94384;
-    let vs_fpm = a.vertical_speed * 196.85;
-    let throttle_pct = self.sim.controls.throttle * 100.0;
-
-    // Heading from body forward in ENU
-    let nose_ecef = a.orientation * DVec3::X;
-    let nose_enu = a.enu_frame.ecef_to_enu(nose_ecef);
-    let hdg = nose_enu.x.atan2(nose_enu.y).to_degrees();
-    let hdg = if hdg < 0.0 { hdg + 360.0 } else { hdg };
-
-    // Pitch angle: body forward projected onto ENU up
-    let pitch_deg = nose_enu.z.asin().to_degrees();
-
-    // Bank angle: body right wing in ENU
-    let right_ecef = a.orientation * DVec3::Y;
-    let right_enu = a.enu_frame.ecef_to_enu(right_ecef);
-    let bank_deg = right_enu.z.asin().to_degrees();
-
-    println!(
-        "HDG:{:5.1}° PIT:{:+5.1}° BNK:{:+5.1}° | \
-         GS:{:5.1}kt VS:{:+6.0}fpm ALT:{:6.0}ft | \
-         THR:{:3.0}% | \
-         {:.4}°{} {:.4}°{}",
-        hdg, pitch_deg, bank_deg,
-        gs_kts, vs_fpm, alt_ft,
-        throttle_pct,
-        lat.abs(), if lat >= 0.0 { "N" } else { "S" },
-        lon.abs(), if lon >= 0.0 { "E" } else { "W" },
-    );
-}
-```
-
-This gives you output like:
-```
-HDG:280.0° PIT:+0.0° BNK:+0.0° | GS:  0.0kt VS:   +0fpm ALT:     0ft | THR:  0% | 37.6139°N 122.3581°W
-HDG:280.0° PIT:+0.0° BNK:+0.0° | GS: 15.3kt VS:   +0fpm ALT:     0ft | THR: 50% | 37.6139°N 122.3581°W
-```
-
-### Important: Use DVec3 import
-The telemetry method uses `DVec3` — make sure `glam::DVec3` is imported in `sim.rs` (it already is).
-
----
-
-## Summary of Changes
-
-### Files to modify:
-1. **`sim.rs`**:
-   - Change `aircraft_view_matrix` signature to accept `head_yaw, head_pitch`
-   - Add `telemetry_timer` field to SimRunner
-   - Add `print_telemetry()` method
-   - Call telemetry in `update()`
-
-2. **`main.rs`**:
-   - Pass `state.camera.yaw, state.camera.pitch` to `aircraft_view_matrix()`
-   - Add KeyCode::KeyC handler to reset camera yaw/pitch
-
-3. **`camera.rs`**:
-   - Add yaw clamp to ±150° in `mouse_move()`
-   - Remove all the WASD movement code from `update()` — camera no longer flies freely, it's locked to the aircraft. The `update()` method can be empty or removed entirely. Position is set by SimRunner.
-
-### Files NOT to modify:
-- `renderer.rs`
-- `obj_loader.rs`
-- `coords.rs`
-- `physics.rs`
-- `shaders/*`
-
-### Test:
+## Test
 1. `cargo run --release`
-2. Click to grab cursor
-3. Move mouse — should look around cockpit
-4. Press C — snaps view forward
-5. Console should print telemetry every 0.5s
-6. Hold Shift to increase throttle, watch GS increase in telemetry
-7. Arrow keys should pitch/roll the aircraft
+2. Aircraft should sit on ground, slight nose-up attitude
+3. Hold Shift (throttle up), watch GS increase in telemetry
+4. No pitch-up until you press Up arrow at speed
+5. At ~90kt, Up arrow rotates nose, aircraft lifts off
+6. Press B to brake on ground
+7. Hard landing from altitude should bounce, not clip through ground
+
+## Tuning Notes
+If the aircraft bounces excessively on the ground, increase `damping` values.
+If it sinks through the ground, increase `spring_k` values.
+If it takes off too early/late, adjust `cl0` or gear Z positions.
+The taildragger should naturally sit with nose up about 8-12° — if not, adjust tail wheel Z position.
