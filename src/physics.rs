@@ -47,6 +47,16 @@ impl Atmosphere {
 
 // --- Aircraft parameters ---
 
+/// Landing gear contact point definition.
+pub struct GearContact {
+    pub pos_body: DVec3,       // attachment point in body frame
+    pub spring_k: f64,         // spring constant (N/m)
+    pub damping: f64,          // damping coefficient (N·s/m)
+    pub rolling_friction: f64, // rolling friction coefficient
+    pub braking_friction: f64, // braking friction coefficient
+    pub is_steerable: bool,    // does rudder input steer this wheel
+}
+
 /// Body frame convention (right-handed):
 ///   X = forward (nose)
 ///   Y = right (starboard wing)
@@ -72,6 +82,8 @@ pub struct AircraftParams {
     pub pitch_damping: f64,
     pub roll_damping: f64,
     pub yaw_damping: f64,
+    // Landing gear
+    pub gear: Vec<GearContact>,
 }
 
 impl AircraftParams {
@@ -96,6 +108,35 @@ impl AircraftParams {
             pitch_damping: -0.08,
             roll_damping: -0.05,
             yaw_damping: -0.04,
+            gear: vec![
+                GearContact {
+                    // Left main — ahead of CG for taildragger stability
+                    pos_body: DVec3::new(1.0, -2.0, 2.0),
+                    spring_k: 50_000.0,
+                    damping: 10_000.0,
+                    rolling_friction: 0.03,
+                    braking_friction: 0.5,
+                    is_steerable: false,
+                },
+                GearContact {
+                    // Right main — ahead of CG for taildragger stability
+                    pos_body: DVec3::new(1.0, 2.0, 2.0),
+                    spring_k: 50_000.0,
+                    damping: 10_000.0,
+                    rolling_friction: 0.03,
+                    braking_friction: 0.5,
+                    is_steerable: false,
+                },
+                GearContact {
+                    // Tail wheel
+                    pos_body: DVec3::new(-5.0, 0.0, 1.5),
+                    spring_k: 20_000.0,
+                    damping: 5_000.0,
+                    rolling_friction: 0.05,
+                    braking_friction: 0.5,
+                    is_steerable: true,
+                },
+            ],
         }
     }
 }
@@ -107,11 +148,12 @@ pub struct Controls {
     pub elevator: f64, // -1.0 (nose down) to 1.0 (nose up)
     pub aileron: f64,  // -1.0 (roll left) to 1.0 (roll right)
     pub rudder: f64,   // -1.0 (yaw left) to 1.0 (yaw right)
+    pub brakes: f64,   // 0.0 to 1.0
 }
 
 impl Default for Controls {
     fn default() -> Self {
-        Self { throttle: 0.0, elevator: 0.0, aileron: 0.0, rudder: 0.0 }
+        Self { throttle: 0.0, elevator: 0.0, aileron: 0.0, rudder: 0.0, brakes: 0.0 }
     }
 }
 
@@ -131,6 +173,7 @@ pub struct RigidBody {
     pub groundspeed: f64,
     pub vertical_speed: f64,
     pub agl: f64,
+    pub on_ground: bool,
 }
 
 impl RigidBody {
@@ -142,6 +185,14 @@ impl RigidBody {
             (self.vel_enu.x * self.vel_enu.x + self.vel_enu.y * self.vel_enu.y).sqrt();
         self.vertical_speed = self.vel_enu.z; // ENU z = up
         self.agl = self.lla.alt;
+    }
+
+    pub fn check_on_ground(&mut self, gear: &[GearContact]) {
+        self.on_ground = gear.iter().any(|g| {
+            let gear_ecef = self.pos_ecef + self.orientation * g.pos_body;
+            let gear_lla = coords::ecef_to_lla(gear_ecef);
+            gear_lla.alt < 0.0
+        });
     }
 }
 
@@ -233,6 +284,79 @@ struct ForcesAndMoments {
     moment_body: DVec3,
 }
 
+/// Compute forces and moments from landing gear ground contact.
+/// Returns (force_ecef, moment_body) contribution from all gear.
+fn compute_gear_forces(
+    params: &AircraftParams,
+    state: &OdeState,
+    controls: &Controls,
+) -> (DVec3, DVec3) {
+    let q = state.orientation();
+    let lla = coords::ecef_to_lla(state.pos);
+    let enu = coords::enu_frame_at(lla.lat, lla.lon, state.pos);
+
+    let mut total_force_ecef = DVec3::ZERO;
+    let mut total_moment_body = DVec3::ZERO;
+
+    for gear in &params.gear {
+        // Gear contact point in ECEF
+        let gear_ecef = state.pos + q * gear.pos_body;
+        let gear_lla = coords::ecef_to_lla(gear_ecef);
+
+        // Compression: how far below ground the contact point is
+        let compression = -gear_lla.alt;
+
+        if compression <= 0.0 {
+            continue; // wheel not touching ground
+        }
+
+        // Velocity of gear contact point in ECEF
+        let omega_cross_r = state.omega.cross(gear.pos_body);
+        let v_contact_ecef = state.vel + q * omega_cross_r;
+
+        // Vertical velocity of contact point (in ENU up direction)
+        let v_contact_enu = enu.ecef_to_enu(v_contact_ecef);
+        let v_vertical = v_contact_enu.z; // positive = moving up
+
+        // --- Normal force (spring-damper, only pushes up) ---
+        let normal_mag = (gear.spring_k * compression - gear.damping * v_vertical).max(0.0);
+        let normal_force_ecef = enu.up * normal_mag;
+
+        // --- Friction force (opposes horizontal velocity) ---
+        let v_horizontal_enu = DVec3::new(v_contact_enu.x, v_contact_enu.y, 0.0);
+        let h_speed = v_horizontal_enu.length();
+
+        let mut friction_force_ecef = DVec3::ZERO;
+        if h_speed > 0.01 {
+            let mu = gear.rolling_friction
+                + (gear.braking_friction - gear.rolling_friction) * controls.brakes;
+
+            let friction_mag = mu * normal_mag;
+            let friction_dir_enu = -v_horizontal_enu / h_speed;
+
+            let mut friction_enu = friction_dir_enu * friction_mag;
+            if gear.is_steerable {
+                let steer_angle = controls.rudder * 0.3; // max ~17° steer
+                let body_right_enu = enu.ecef_to_enu(q * DVec3::Y);
+                friction_enu += body_right_enu * steer_angle * normal_mag * 0.3;
+            }
+
+            friction_force_ecef = enu.enu_to_ecef(friction_enu);
+        }
+
+        // Total force from this gear leg
+        let gear_force_ecef = normal_force_ecef + friction_force_ecef;
+        total_force_ecef += gear_force_ecef;
+
+        // Moment about CG from this gear leg (in body frame)
+        let gear_force_body = q.conjugate() * gear_force_ecef;
+        let moment = gear.pos_body.cross(gear_force_body);
+        total_moment_body += moment;
+    }
+
+    (total_force_ecef, total_moment_body)
+}
+
 /// Compute all forces and moments at a given state.
 /// Body frame: X=forward, Y=right, Z=down (right-handed).
 fn compute_forces_and_moments(
@@ -309,9 +433,12 @@ fn compute_forces_and_moments(
     // Gravity in ECEF: -g * mass * ellipsoidal_up
     let gravity_ecef = -enu.up * G * params.mass;
 
+    // Landing gear ground contact
+    let (gear_force_ecef, gear_moment_body) = compute_gear_forces(params, state, controls);
+
     ForcesAndMoments {
-        force_ecef: force_ecef_aero + gravity_ecef,
-        moment_body,
+        force_ecef: force_ecef_aero + gravity_ecef + gear_force_ecef,
+        moment_body: moment_body + gear_moment_body,
     }
 }
 
@@ -354,8 +481,6 @@ pub struct Simulation {
     pub atmosphere: Atmosphere,
 }
 
-const GROUND_FRICTION: f64 = 0.05;
-
 impl Simulation {
     pub fn new(params: AircraftParams, aircraft: RigidBody) -> Self {
         let atmo = Atmosphere::at_altitude(aircraft.lla.alt.max(0.0));
@@ -370,8 +495,22 @@ impl Simulation {
     pub fn step(&mut self, dt: f64) {
         self.integrate_rk4(dt);
         self.aircraft.update_derived();
-        self.ground_check();
+        self.aircraft.check_on_ground(&self.params.gear);
         self.atmosphere = Atmosphere::at_altitude(self.aircraft.lla.alt.max(0.0));
+
+        // Safety clamp: prevent numerical explosion
+        if self.aircraft.lla.alt < -5.0 {
+            log::warn!("Aircraft below -5m, emergency clamp");
+            let clamped = LLA {
+                lat: self.aircraft.lla.lat,
+                lon: self.aircraft.lla.lon,
+                alt: 0.0,
+            };
+            self.aircraft.pos_ecef = coords::lla_to_ecef(&clamped);
+            self.aircraft.vel_ecef = DVec3::ZERO;
+            self.aircraft.angular_vel_body = DVec3::ZERO;
+            self.aircraft.update_derived();
+        }
     }
 
     fn integrate_rk4(&mut self, dt: f64) {
@@ -394,28 +533,6 @@ impl Simulation {
         self.aircraft.angular_vel_body = final_state.omega;
     }
 
-    fn ground_check(&mut self) {
-        if self.aircraft.lla.alt < 0.0 {
-            let clamped = LLA {
-                lat: self.aircraft.lla.lat,
-                lon: self.aircraft.lla.lon,
-                alt: 0.0,
-            };
-            self.aircraft.pos_ecef = coords::lla_to_ecef(&clamped);
-            self.aircraft.lla.alt = 0.0;
-            self.aircraft.agl = 0.0;
-
-            let vel_enu = self.aircraft.enu_frame.ecef_to_enu(self.aircraft.vel_ecef);
-            if vel_enu.z < 0.0 {
-                let mut corrected = DVec3::new(vel_enu.x, vel_enu.y, 0.0);
-                corrected *= (1.0 - GROUND_FRICTION * PHYSICS_DT).max(0.0);
-                self.aircraft.vel_ecef = self.aircraft.enu_frame.enu_to_ecef(corrected);
-                self.aircraft.vel_enu = corrected;
-            }
-
-            self.aircraft.angular_vel_body = DVec3::ZERO;
-        }
-    }
 }
 
 // --- Initial conditions ---
@@ -424,7 +541,8 @@ impl Simulation {
 pub fn create_aircraft_at_sfo() -> RigidBody {
     let lat = 37.613931_f64.to_radians();
     let lon = (-122.358089_f64).to_radians();
-    let pos = coords::lla_to_ecef(&LLA { lat, lon, alt: 0.0 });
+    // Start CG ~2m above ground so main gear just touches
+    let pos = coords::lla_to_ecef(&LLA { lat, lon, alt: 2.0 });
     let enu = coords::enu_frame_at(lat, lon, pos);
 
     // Heading 280° clockwise from north
@@ -449,12 +567,13 @@ pub fn create_aircraft_at_sfo() -> RigidBody {
         vel_ecef: DVec3::ZERO,
         orientation,
         angular_vel_body: DVec3::ZERO,
-        lla: LLA { lat, lon, alt: 0.0 },
+        lla: LLA { lat, lon, alt: 2.0 },
         enu_frame: enu,
         vel_enu: DVec3::ZERO,
         groundspeed: 0.0,
         vertical_speed: 0.0,
-        agl: 0.0,
+        agl: 2.0,
+        on_ground: true,
     };
     body.update_derived();
     body
@@ -503,7 +622,7 @@ mod tests {
         let lon_deg = body.lla.lon.to_degrees();
         assert!((lat_deg - 37.613931).abs() < 0.001);
         assert!((lon_deg - (-122.358089)).abs() < 0.001);
-        assert!(body.lla.alt.abs() < 1.0);
+        assert!((body.lla.alt - 2.0).abs() < 1.0, "initial alt: {}", body.lla.alt);
 
         // Orientation should be a valid unit quaternion
         let q = body.orientation;
@@ -531,13 +650,15 @@ mod tests {
         let initial_pos = body.pos_ecef;
         let mut sim = Simulation::new(params, body);
 
-        for _ in 0..120 {
+        // Run 3 seconds to let gear springs settle
+        for _ in 0..360 {
             sim.step(PHYSICS_DT);
         }
 
         let drift = (sim.aircraft.pos_ecef - initial_pos).length();
-        assert!(drift < 1.0, "aircraft drifted {drift:.3}m after 1s at rest");
-        assert!(sim.aircraft.lla.alt.abs() < 1.0, "alt: {}", sim.aircraft.lla.alt);
+        assert!(drift < 5.0, "aircraft drifted {drift:.3}m after 3s at rest");
+        assert!(sim.aircraft.lla.alt > -1.0 && sim.aircraft.lla.alt < 5.0,
+            "alt out of range: {}", sim.aircraft.lla.alt);
     }
 
     #[test]

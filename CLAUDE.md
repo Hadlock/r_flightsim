@@ -1,313 +1,229 @@
-# CLAUDE.md — Ground Contact Model
+# CLAUDE.md — Landmarks, OBJ Origin System, Pyramid Generation
 
-## Problem
-The current ground check in `physics.rs` only clamps altitude and zeros downward velocity. This causes:
-1. Aircraft pitches nose up on its own at ~110kt because lift exceeds weight but there's no normal force to prevent rotation
-2. Orientation is unconstrained on the ground — the plane can pitch/roll freely while wheels are on the runway
-3. No proper weight-on-wheels normal force, just a velocity clamp
+## Overview
+Add landmark objects to the scene: three existing cubes and three new pyramids. Implement an origin-tag system that reads `# origin:` comments from OBJ files to automatically place them in the world via ECEF coordinates.
 
-## Goal
-Replace the crude ground clamp with a spring-damper landing gear model that provides:
-- Normal force opposing gravity when on ground (weight on wheels)
-- Pitch/roll constraint from gear geometry (3-point contact: nose gear + two mains)
-- Proper takeoff rotation: pilot must use elevator at sufficient speed to rotate
-- Realistic ground roll friction (rolling + braking)
-- Nosewheel steering via rudder input
+## Task 1: Generate Three Pyramid OBJ Files
 
-## Changes — All in `physics.rs`
+Create these files in `assets/`. Each pyramid is a square-base pyramid (5 vertices, 6 triangular faces). The OBJ geometry is centered at (0,0,0) in local coordinates, using ENU convention for the vertex layout: X=east, Y=north, Z=up. The base sits on Z=0 (ground), apex at Z=height.
 
-### 1. Add Landing Gear Geometry to AircraftParams
+### Pyramid 1: Great Pyramid (Giza-scale)
+**File:** `assets/pyramid_giza.obj`
+```
+# Great Pyramid landmark
+# origin: 37°36'57.5"N 122°23'16.6"W
+# base: 230m, height: 150m
+```
+- Base corners at Z=0: (±115, ±115, 0) — four combinations
+- Apex at (0, 0, 150)
+- Half-base = 115.0
 
-Add gear contact points in body frame (X=forward, Y=right, Z=down).
-Ki-61 is a taildragger (two main gear + tail wheel):
+### Pyramid 2: Transamerica-scale
+**File:** `assets/pyramid_transamerica.obj`
+```
+# Transamerica Pyramid landmark
+# origin: 37.795200, -122.402800
+# base: 53m, height: 260m
+```
+- Base corners at Z=0: (±26.5, ±26.5, 0)
+- Apex at (0, 0, 260)
+- Half-base = 26.5
+
+### Pyramid 3: Mountain-scale
+**File:** `assets/pyramid_mountain.obj`
+```
+# Mountain pyramid landmark
+# origin: 37°55'44.5"N 122°34'40.0"W
+# base: 10000m, height: 784m
+```
+- Base corners at Z=0: (±5000, ±5000, 0)
+- Apex at (0, 0, 784)
+- Half-base = 5000.0
+
+### OBJ Vertex/Face Template
+All three pyramids use the same topology, just different dimensions. For half-base `h` and height `H`:
+
+```obj
+# [title comment]
+# origin: [coordinates]
+v -h -h 0.0
+v  h -h 0.0
+v  h  h 0.0
+v -h  h 0.0
+v  0.0  0.0 H
+
+vn 0 0 -1
+# face normals computed below
+
+# Base (two triangles, facing down, normal -Z)
+f 1//1 3//1 2//1
+f 1//1 4//1 3//1
+
+# South face (v1, v2, v5)
+f 1 2 5
+# East face (v2, v3, v5)
+f 2 3 5
+# North face (v3, v4, v5)
+f 3 4 5
+# West face (v4, v1, v5)
+f 4 1 5
+```
+
+Note: Don't include normals on the side faces — let `obj_loader.rs` compute smooth normals (it already does this). Only include the base normal explicitly if desired, or just let the smooth normal pass handle everything. Simplest: omit all `vn` lines and `//n` references, let the loader compute normals.
+
+Simplest OBJ format (no normals, loader computes them):
+```obj
+# [title]
+# origin: 37°36'57.5"N 122°23'16.6"W
+v -115.0 -115.0 0.0
+v  115.0 -115.0 0.0
+v  115.0  115.0 0.0
+v -115.0  115.0 0.0
+v  0.0  0.0  150.0
+f 1 3 2
+f 1 4 3
+f 1 2 5
+f 2 3 5
+f 3 4 5
+f 4 1 5
+```
+
+## Task 2: Rename Cube Files
+
+Rename in `assets/`:
+- `1m_cube.txt` → `1m_cube.obj`
+- `10m_cube.txt` → `10m_cube.obj`
+- `30m_cube.txt` → `30m_cube.obj`
+
+## Task 3: Origin Tag Parser
+
+Create a new function in `scene.rs` (or a small helper module) that:
+
+1. Reads the first ~10 lines of an OBJ file looking for `# origin:` comments
+2. Parses the coordinates in either format:
+   - DMS: `37°36'57.5"N 122°23'16.6"W`
+   - Decimal: `37.795200, -122.402800`
+3. Returns an `Option<LLA>` (alt = 0.0 for ground objects)
+
+### Parser Details
 
 ```rust
-pub struct GearContact {
-    pub pos_body: DVec3,      // attachment point in body frame
-    pub spring_k: f64,        // spring constant (N/m)
-    pub damping: f64,         // damping coefficient (N·s/m)
-    pub rolling_friction: f64, // rolling friction coefficient
-    pub braking_friction: f64, // braking friction coefficient
-    pub is_steerable: bool,   // does rudder input steer this wheel
+/// Parse an origin comment from an OBJ file.
+/// Supports two formats:
+///   # origin: 37°36'57.5"N 122°23'16.6"W
+///   # origin: 37.795200, -122.402800
+pub fn parse_origin(path: &Path) -> Option<LLA>
+```
+
+**DMS parsing:**
+- Pattern: `DD°MM'SS.S"N/S DDD°MM'SS.S"E/W`
+- Degrees = DD + MM/60 + SS.S/3600
+- S and W are negative
+- The degree symbol may be `°` (UTF-8) or similar
+
+**Decimal parsing:**
+- Pattern: two comma-separated floats
+- First is latitude, second is longitude
+- Negative values for S/W (no N/S/E/W suffix)
+
+Both formats: altitude defaults to 0.0 (ground level on ellipsoid).
+
+**Important:** Return latitude and longitude in **radians** in the LLA struct (matching the existing convention in coords.rs).
+
+## Task 4: Update `scene.rs` — Auto-Load All OBJ Landmarks
+
+Replace the current hardcoded teapot loading in `load_scene()` with a system that:
+
+1. Scans `assets/` directory for all `.obj` files
+2. Skips the aircraft OBJ (hardcoded name or a skip-list)
+3. For each OBJ with a valid `# origin:` tag:
+   - Parse the origin → LLA → ECEF position
+   - Load the mesh
+   - Place it in the world at that ECEF position
+   - The OBJ local frame is ENU (X=east, Y=north, Z=up), so the rotation must transform from local ENU to ECEF at that location
+
+### ENU-to-ECEF Rotation for Static Objects
+
+This is critical. The OBJ vertices are in ENU coordinates (X=east, Y=north, Z=up) at the object's origin. To render them correctly in ECEF world space, the SceneObject rotation must encode the ENU→ECEF rotation at that lat/lon.
+
+```rust
+fn enu_to_ecef_quat(lat_rad: f64, lon_rad: f64) -> Quat {
+    let enu = coords::enu_frame_at(lat_rad, lon_rad, DVec3::ZERO);
+    // Build rotation matrix: columns are where ENU X,Y,Z axes go in ECEF
+    // ENU X (east) → enu.east in ECEF
+    // ENU Y (north) → enu.north in ECEF
+    // ENU Z (up) → enu.up in ECEF
+    let mat = glam::DMat3::from_cols(enu.east, enu.north, enu.up);
+    let dq = glam::DQuat::from_mat3(&mat);
+    Quat::from_xyzw(dq.x as f32, dq.y as f32, dq.z as f32, dq.w as f32)
 }
 ```
 
-Add to AircraftParams:
-```rust
-pub gear: Vec<GearContact>,
+Each static SceneObject gets:
+- `world_pos`: ECEF position from `lla_to_ecef(origin_lla)`
+- `rotation`: `enu_to_ecef_quat(origin_lla.lat, origin_lla.lon)`  
+- `scale`: `1.0` (OBJ vertices are already in meters)
+
+### Placement Relative to Runway
+
+The aircraft starts at SFO heading 280°. Looking out the windshield:
+- **Left side (south of runway):** Place the three cubes
+- **Right side (north of runway):** The teapots are already there
+
+The cubes have their own `# origin:` comments already. Verify the cube origins put them to the left (south) of the runway centerline. If they need adjusting, update the origin comments in the cube OBJ files. The cubes should be visible from the cockpit during the takeoff roll.
+
+Current cube origins from the files:
+- 1m cube: `37°38'37.3"N 122°34'18.1"W` — this is ~5km northwest, might be too far. Move closer if needed.
+- 10m cube: `37.643700, -122.571700` — this is way west over the ocean. Fix this.
+- 30m cube: `37°36'53.1"N 122°21'56.1"W` — east of SFO
+
+**Update cube origins** to be south of the runway, visible during takeoff roll at SFO 28L. The runway is at approximately 37.6139°N, 122.358°W heading 280°. Place cubes ~50-200m south of centerline, spaced along the runway:
+
+```
+# 1m cube — near threshold, 50m south of centerline
+# origin: 37.6135, -122.3575
+
+# 10m cube — 300m down runway, 100m south  
+# origin: 37.6130, -122.3610
+
+# 30m cube — 600m down runway, 150m south
+# origin: 37.6125, -122.3650
 ```
 
-Ki-61 gear positions (approximate, in body frame X=fwd, Y=right, Z=down):
-```rust
-// Main gear: ~1m behind CG, 2m apart laterally, ~2m below CG
-// Tail wheel: ~5m behind CG, centerline, ~1.5m below CG
-gear: vec![
-    GearContact {  // Left main
-        pos_body: DVec3::new(-1.0, -2.0, 2.0),
-        spring_k: 50_000.0,
-        damping: 10_000.0,
-        rolling_friction: 0.03,
-        braking_friction: 0.5,
-        is_steerable: false,
-    },
-    GearContact {  // Right main
-        pos_body: DVec3::new(-1.0, 2.0, 2.0),
-        spring_k: 50_000.0,
-        damping: 10_000.0,
-        rolling_friction: 0.03,
-        braking_friction: 0.5,
-        is_steerable: false,
-    },
-    GearContact {  // Tail wheel
-        pos_body: DVec3::new(-5.0, 0.0, 1.5),
-        spring_k: 20_000.0,
-        damping: 5_000.0,
-        rolling_friction: 0.05,
-        braking_friction: 0.5,
-        is_steerable: true,
-    },
-],
-```
+Update the `# origin:` comments in the three cube OBJ files to these positions.
 
-### 2. Add Braking to Controls
+### Keep Teapots
+Keep teapots in the scene too. They already have hardcoded positions (10m east of reference, every 100m north). Convert teapots to also use the origin-tag system, OR keep them hardcoded — either is fine. The important thing is they remain visible to the right during takeoff.
 
-```rust
-pub struct Controls {
-    pub throttle: f64,
-    pub elevator: f64,
-    pub aileron: f64,
-    pub rudder: f64,
-    pub brakes: f64,  // 0.0 to 1.0
-}
-```
+## Task 5: Update `obj_loader.rs` — Handle Missing Normals
 
-Map `KeyCode::KeyB` to brakes (hold = brake). Add to `sim.rs` update_controls:
-```rust
-c.brakes = if held.contains(&KeyCode::KeyB) { 1.0 } else { 0.0 };
-```
+The pyramid OBJs won't have normals. The loader already computes smooth normals as a fallback, so this should just work. But verify: if an OBJ has no `vn` lines, the loader should still produce valid vertices with computed normals. The current code initializes normals to `[0,0,0]` and then overwrites with computed smooth normals — this is correct.
 
-### 3. Replace `ground_check()` with `compute_gear_forces()`
+## Summary of File Changes
 
-Remove the existing `ground_check()` method entirely. Instead, compute gear forces as part of the force/moment calculation so they participate in RK4 integration properly.
+### New files:
+- `assets/pyramid_giza.obj`
+- `assets/pyramid_transamerica.obj`
+- `assets/pyramid_mountain.obj`
 
-**Add this function and call it from `compute_forces_and_moments()`:**
+### Renamed files:
+- `assets/1m_cube.txt` → `assets/1m_cube.obj` (also update origin comment)
+- `assets/10m_cube.txt` → `assets/10m_cube.obj` (also update origin comment)
+- `assets/30m_cube.txt` → `assets/30m_cube.obj` (also update origin comment)
 
-```rust
-/// Compute forces and moments from landing gear ground contact.
-/// Returns (force_ecef, moment_body) contribution from all gear.
-fn compute_gear_forces(
-    params: &AircraftParams,
-    state: &OdeState,
-    controls: &Controls,
-) -> (DVec3, DVec3) {
-    let q = state.orientation();
-    let lla = coords::ecef_to_lla(state.pos);
-    let enu = coords::enu_frame_at(lla.lat, lla.lon, state.pos);
+### Modified files:
+- `scene.rs` — origin parser, auto-loading, ENU→ECEF rotation for static objects
+- `main.rs` — update `load_scene()` call if signature changes (it currently takes ref_pos and enu, may no longer need those if we auto-parse origins)
 
-    let mut total_force_ecef = DVec3::ZERO;
-    let mut total_moment_body = DVec3::ZERO;
-
-    for gear in &params.gear {
-        // Gear contact point in ECEF
-        let gear_ecef = state.pos + q * gear.pos_body;
-        let gear_lla = coords::ecef_to_lla(gear_ecef);
-
-        // Compression: how far below ground the contact point is
-        // Positive compression = gear is touching/compressed
-        let compression = -gear_lla.alt;
-
-        if compression <= 0.0 {
-            continue; // wheel not touching ground
-        }
-
-        // Velocity of gear contact point in ECEF
-        // v_contact = v_cg + omega_body × r_body (transformed to ECEF)
-        let omega_cross_r = state.omega.cross(gear.pos_body);
-        let v_contact_ecef = state.vel + q * omega_cross_r;
-
-        // Vertical velocity of contact point (in ENU up direction)
-        let v_contact_enu = enu.ecef_to_enu(v_contact_ecef);
-        let v_vertical = v_contact_enu.z; // positive = moving up
-
-        // --- Normal force (spring-damper, only pushes up) ---
-        let normal_mag = (gear.spring_k * compression - gear.damping * v_vertical).max(0.0);
-        let normal_force_ecef = enu.up * normal_mag;
-
-        // --- Friction force (opposes horizontal velocity) ---
-        let v_horizontal_enu = DVec3::new(v_contact_enu.x, v_contact_enu.y, 0.0);
-        let h_speed = v_horizontal_enu.length();
-
-        let mut friction_force_ecef = DVec3::ZERO;
-        if h_speed > 0.01 {
-            // Friction coefficient: blend rolling and braking
-            let mu = gear.rolling_friction
-                + (gear.braking_friction - gear.rolling_friction) * controls.brakes;
-
-            let friction_mag = mu * normal_mag;
-            let friction_dir_enu = -v_horizontal_enu / h_speed;
-
-            // Steerable gear: add lateral force from rudder
-            // (rudder deflects the wheel, creating a side force)
-            let mut friction_enu = friction_dir_enu * friction_mag;
-            if gear.is_steerable {
-                // Rudder input creates a lateral force proportional to forward speed
-                let steer_angle = controls.rudder * 0.3; // max 17° steer
-                let body_right_enu = enu.ecef_to_enu(q * DVec3::Y);
-                // Lateral force from steering: sideways component
-                friction_enu += body_right_enu * steer_angle * normal_mag * 0.3;
-            }
-
-            friction_force_ecef = enu.enu_to_ecef(friction_enu);
-        }
-
-        // Total force from this gear leg
-        let gear_force_ecef = normal_force_ecef + friction_force_ecef;
-        total_force_ecef += gear_force_ecef;
-
-        // Moment about CG from this gear leg (in body frame)
-        // torque = r × F, where r is gear position relative to CG (body frame)
-        // F needs to be in body frame too
-        let gear_force_body = q.conjugate() * gear_force_ecef;
-        let moment = gear.pos_body.cross(gear_force_body);
-        total_moment_body += moment;
-    }
-
-    (total_force_ecef, total_moment_body)
-}
-```
-
-### 4. Integrate Gear Forces into `compute_forces_and_moments()`
-
-In the existing `compute_forces_and_moments()` function, **add gear forces** after the gravity calculation:
-
-```rust
-// ... existing code: aero forces, thrust, gravity ...
-
-// Landing gear ground contact
-let (gear_force_ecef, gear_moment_body) = compute_gear_forces(params, state, controls);
-
-ForcesAndMoments {
-    force_ecef: force_ecef_aero + gravity_ecef + gear_force_ecef,
-    moment_body: moment_body + gear_moment_body,
-}
-```
-
-### 5. Remove `ground_check()` from `Simulation::step()`
-
-The step method should now be simply:
-```rust
-pub fn step(&mut self, dt: f64) {
-    self.integrate_rk4(dt);
-    self.aircraft.update_derived();
-    self.atmosphere = Atmosphere::at_altitude(self.aircraft.lla.alt.max(0.0));
-}
-```
-
-No more post-integration clamping. The gear spring forces handle everything through proper physics.
-
-### 6. Safety Clamp (keep as backup)
-
-Add a minimal altitude safety clamp ONLY to prevent numerical explosion if the gear springs can't keep up (shouldn't happen with proper spring constants, but good safety net):
-
-```rust
-// At end of step(), after update_derived():
-if self.aircraft.lla.alt < -5.0 {
-    // Something went very wrong — emergency clamp
-    log::warn!("Aircraft below -5m, emergency clamp");
-    let clamped = LLA {
-        lat: self.aircraft.lla.lat,
-        lon: self.aircraft.lla.lon,
-        alt: 0.0,
-    };
-    self.aircraft.pos_ecef = coords::lla_to_ecef(&clamped);
-    self.aircraft.vel_ecef = DVec3::ZERO;
-    self.aircraft.angular_vel_body = DVec3::ZERO;
-    self.aircraft.update_derived();
-}
-```
-
-### 7. Add `on_ground` flag to RigidBody
-
-Useful for telemetry and future logic:
-
-```rust
-pub struct RigidBody {
-    // ... existing fields ...
-    pub on_ground: bool,  // true if any gear is compressed
-}
-```
-
-Set it during `update_derived()` or after gear force computation. Simplest approach: check if `lla.alt < 3.0` (approximate gear height). Or better: add a method that checks gear compression:
-
-```rust
-impl RigidBody {
-    pub fn check_on_ground(&mut self, gear: &[GearContact]) {
-        self.on_ground = gear.iter().any(|g| {
-            let gear_ecef = self.pos_ecef + self.orientation * g.pos_body;
-            let gear_lla = coords::ecef_to_lla(gear_ecef);
-            gear_lla.alt < 0.0
-        });
-    }
-}
-```
-
-Call after `update_derived()` in `step()`.
-
-### 8. Update Telemetry in `sim.rs`
-
-Add weight-on-wheels and brakes to the telemetry output:
-
-```rust
-let wow = if a.on_ground { "GND" } else { "AIR" };
-let brk = if self.sim.controls.brakes > 0.0 { "BRK" } else { "   " };
-
-println!(
-    "HDG:{:5.1}° PIT:{:+5.1}° BNK:{:+5.1}° | \
-     GS:{:5.1}kt VS:{:+6.0}fpm ALT:{:6.0}ft | \
-     THR:{:3.0}% {} {} | \
-     {:.4}°{} {:.4}°{}",
-    hdg, pitch_deg, bank_deg,
-    gs_kts, vs_fpm, alt_ft,
-    throttle_pct, wow, brk,
-    lat.abs(), if lat >= 0.0 { "N" } else { "S" },
-    lon.abs(), if lon >= 0.0 { "E" } else { "W" },
-);
-```
-
-## Expected Behavior After Changes
-
-1. **Stationary on ground**: Gear springs support aircraft weight, nose points slightly up (taildragger attitude ~10° nose up), aircraft sits still
-2. **Throttle up, taxi**: Aircraft accelerates forward, stays on ground, rolling friction provides mild deceleration
-3. **Approaching rotation speed (~80-90kt)**: Elevator input can raise the nose. Without elevator, aircraft stays on ground — the tail wheel and main gear geometry prevent spontaneous pitch-up
-4. **Rotation and liftoff**: Pull back on elevator, nose pitches up, AoA increases, when lift > weight the gear unloads and aircraft flies
-5. **Landing**: Descend toward ground, gear springs absorb impact, friction decelerates
-6. **Brakes (B key)**: High friction on ground for stopping
-
-## What This Fixes
-- No more spontaneous pitch-up at 110kt
-- No more unconstrained orientation on ground
-- Proper takeoff requires pilot elevator input
-- Landing is survivable (spring-damper absorbs impact)
-- Taildragger ground attitude (slight nose-up)
-
-## Files Modified
-- `physics.rs` — gear model, force integration, remove old ground_check
-- `sim.rs` — brake key binding, telemetry update
-
-## Files NOT Modified
-- `renderer.rs`, `shaders/*`, `obj_loader.rs`, `coords.rs`, `camera.rs`, `main.rs`, `scene.rs`
+### NOT modified:
+- `physics.rs`, `coords.rs`, `camera.rs`, `renderer.rs`, `obj_loader.rs`, `sim.rs`, `shaders/*`
 
 ## Test
 1. `cargo run --release`
-2. Aircraft should sit on ground, slight nose-up attitude
-3. Hold Shift (throttle up), watch GS increase in telemetry
-4. No pitch-up until you press Up arrow at speed
-5. At ~90kt, Up arrow rotates nose, aircraft lifts off
-6. Press B to brake on ground
-7. Hard landing from altitude should bounce, not clip through ground
-
-## Tuning Notes
-If the aircraft bounces excessively on the ground, increase `damping` values.
-If it sinks through the ground, increase `spring_k` values.
-If it takes off too early/late, adjust `cl0` or gear Z positions.
-The taildragger should naturally sit with nose up about 8-12° — if not, adjust tail wheel Z position.
+2. Sitting on SFO 28L, cubes visible to the left, teapots to the right
+3. Throttle up, roll down runway — cubes and teapots scroll past
+4. After liftoff and climbing, pyramids should be visible:
+   - Giza pyramid: ~5km south-southeast, 150m tall
+   - Transamerica: ~20km north in SF, 260m tall, thin
+   - Mountain: ~35km northwest, massive 10km base
+5. All objects should be right-side-up (Z=up in ENU correctly maps to local vertical)

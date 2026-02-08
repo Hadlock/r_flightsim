@@ -126,14 +126,17 @@ impl SimRunner {
         let right_enu = a.enu_frame.ecef_to_enu(right_ecef);
         let bank_deg = right_enu.z.asin().to_degrees();
 
+        let wow = if a.on_ground { "GND" } else { "AIR" };
+        let brk = if self.sim.controls.brakes > 0.0 { "BRK" } else { "   " };
+
         println!(
             "HDG:{:5.1}\u{00b0} PIT:{:+5.1}\u{00b0} BNK:{:+5.1}\u{00b0} | \
              GS:{:5.1}kt VS:{:+6.0}fpm ALT:{:6.0}ft | \
-             THR:{:3.0}% | \
+             THR:{:3.0}% {} {} | \
              {:.4}\u{00b0}{} {:.4}\u{00b0}{}",
             hdg, pitch_deg, bank_deg,
             gs_kts, vs_fpm, alt_ft,
-            throttle_pct,
+            throttle_pct, wow, brk,
             lat.abs(), if lat >= 0.0 { "N" } else { "S" },
             lon.abs(), if lon >= 0.0 { "E" } else { "W" },
         );
@@ -163,6 +166,9 @@ impl SimRunner {
         if throttle_down {
             c.throttle = (c.throttle - THROTTLE_RATE * dt).max(0.0);
         }
+
+        // Brakes: hold B
+        c.brakes = if held.contains(&KeyCode::KeyB) { 1.0 } else { 0.0 };
     }
 }
 
