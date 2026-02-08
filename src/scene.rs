@@ -2,6 +2,7 @@ use glam::{DVec3, Mat4, Quat};
 use std::path::Path;
 use wgpu::util::DeviceExt;
 
+use crate::coords::ENUFrame;
 use crate::obj_loader::{self, MeshData};
 
 pub struct SceneObject {
@@ -73,42 +74,45 @@ fn spawn(
     }
 }
 
-pub fn load_scene(device: &wgpu::Device) -> Vec<SceneObject> {
-    let teapot_mesh = obj_loader::load_obj(Path::new("assets/teapot.obj"));
-    let plane_mesh = obj_loader::load_obj(Path::new(
+/// Load the Ki-61 aircraft model as a SceneObject.
+/// Position and rotation are set to defaults — caller updates them each frame.
+pub fn load_aircraft_object(device: &wgpu::Device, object_id: u32) -> SceneObject {
+    let mesh = obj_loader::load_obj(Path::new(
         "assets/14082_WWII_Plane_Japan_Kawasaki_Ki-61_v1_L2.obj",
     ));
+    // Ki-61: 12m wingspan, OBJ wingspan extent is ~2.2019 units
+    let scale = 12.0 / 2.2019;
+    spawn(
+        device,
+        &mesh,
+        "aircraft",
+        DVec3::ZERO,
+        Quat::IDENTITY,
+        scale as f32,
+        object_id,
+    )
+}
 
-    // Teapot OBJ: X=spout-to-handle(6.43), Y=height(3.15, up), Z=front-back(4.0)
-    // Already Y-up, no rotation needed.
-    // Real teapot: 0.35m long → scale = 0.35 / 6.434
-    let teapot_scale = 0.35 / 6.434;
+/// Load reference objects (teapots) placed near the aircraft starting position.
+pub fn load_scene(device: &wgpu::Device, ref_pos: DVec3, enu: &ENUFrame) -> Vec<SceneObject> {
+    let teapot_mesh = obj_loader::load_obj(Path::new("assets/teapot.obj"));
 
-    // Plane OBJ: X=nose-to-tail(1.59), Y=wingspan(2.20), Z=height(0.62)
-    // Need: X→World Z (north), Y→World X (east), Z→World Y (up)
-    // This is a -120° rotation around the (1,1,1) axis.
-    let plane_rot = Quat::from_axis_angle(
-        glam::Vec3::new(1.0, 1.0, 1.0).normalize(),
-        -2.0 * std::f32::consts::FRAC_PI_3,
-    );
-    // Real Ki-61: 8.94m long, 12m wingspan → scale from wingspan: 12.0 / 2.2019
-    let plane_scale = 12.0 / 2.2019;
+    // Scale teapot to ~2m tall for visibility as runway markers
+    let teapot_scale = 2.0 / 6.434;
 
     let mut objects = Vec::new();
-    let mut id = 1u32;
+    let mut id = 10u32;
 
-    // 10 teapots in a grid on Y=0, spaced ~1m apart
-    let teapot_positions: [(f64, f64, f64); 1] = [
-        (0.0, 0.0, 0.0),
-
-    ];
-
-    for (i, &(x, y, z)) in teapot_positions.iter().enumerate() {
+    // Place teapots along the runway (north direction) as visual reference
+    for i in 0..10 {
+        let north_offset = (i as f64) * 100.0; // every 100m
+        let offset_enu = DVec3::new(10.0, north_offset, 0.0); // 10m east of centerline
+        let pos = ref_pos + enu.enu_to_ecef(offset_enu);
         objects.push(spawn(
             device,
             &teapot_mesh,
             &format!("teapot_{}", i),
-            DVec3::new(x, y, z),
+            pos,
             Quat::IDENTITY,
             teapot_scale as f32,
             id,
@@ -116,51 +120,6 @@ pub fn load_scene(device: &wgpu::Device) -> Vec<SceneObject> {
         id += 1;
     }
 
-    // 10 planes on Y=0, spaced ~20m apart
-    let plane_positions: [(f64, f64, f64); 1] = [
-        (0.0, 0.0, 0.0),
-    ];
-
-    for (i, &(x, y, z)) in plane_positions.iter().enumerate() {
-        objects.push(spawn(
-            device,
-            &plane_mesh,
-            &format!("plane_{}", i),
-            DVec3::new(x, y, z),
-            plane_rot,
-            plane_scale as f32,
-            id,
-        ));
-        id += 1;
-    }
-
-    /*
-    // Reference cubes: 1m, 10m, 30m — already real-world scale, no rotation.
-    // Placed along Z axis, 10m edge-to-edge gaps, sitting on Y=0.
-    let cube_1m = obj_loader::load_obj(Path::new("assets/1m_cube.obj"));
-    let cube_10m = obj_loader::load_obj(Path::new("assets/10m_cube.obj"));
-    let cube_30m = obj_loader::load_obj(Path::new("assets/30m_cube.obj"));
-
-    // 1m cube: center Y=0.5 so bottom is Y=0. Place at Z=10.
-    objects.push(spawn(
-        device, &cube_1m, "cube_1m",
-        DVec3::new(0.0, 0.5, 10.0), Quat::IDENTITY, 1.0, id,
-    ));
-    id += 1;
-
-    // 10m cube: 1m cube far edge at Z=10.5, +10m gap → near edge at Z=20.5, center at Z=25.5
-    objects.push(spawn(
-        device, &cube_10m, "cube_10m",
-        DVec3::new(0.0, 5.0, 25.5), Quat::IDENTITY, 1.0, id,
-    ));
-    id += 1;
-
-    // 30m cube: 10m cube far edge at Z=30.5, +10m gap → near edge at Z=40.5, center at Z=55.5
-    objects.push(spawn(
-        device, &cube_30m, "cube_30m",
-        DVec3::new(0.0, 15.0, 55.5), Quat::IDENTITY, 1.0, id,
-    ));*/
     let _ = id;
-
     objects
 }

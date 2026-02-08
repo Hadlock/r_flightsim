@@ -1,9 +1,13 @@
 mod camera;
+mod coords;
 mod obj_loader;
+mod physics;
 mod renderer;
 mod scene;
+mod sim;
 
 use camera::Camera;
+use glam::Quat;
 use renderer::Renderer;
 use std::time::Instant;
 use winit::{
@@ -18,6 +22,14 @@ use winit::{
 const INITIAL_WIDTH: u32 = 800;
 const INITIAL_HEIGHT: u32 = 600;
 
+/// OBJ model → body frame rotation.
+/// OBJ has X=forward, Y=right, Z=up. Body has X=forward, Y=right, Z=down.
+/// 180° around X flips Y and Z: gives (x, -y, -z). This mirrors the model
+/// left-right (invisible for symmetric aircraft) and flips Z correctly.
+fn model_to_body_rotation() -> Quat {
+    Quat::from_rotation_x(std::f32::consts::PI)
+}
+
 struct AppState {
     window: Window,
     surface: wgpu::Surface<'static>,
@@ -29,6 +41,9 @@ struct AppState {
     objects: Vec<scene::SceneObject>,
     last_frame: Instant,
     cursor_grabbed: bool,
+    sim_runner: sim::SimRunner,
+    aircraft_idx: usize,
+    model_to_body: Quat,
 }
 
 struct App {
@@ -110,7 +125,22 @@ impl ApplicationHandler for App {
 
         let renderer = Renderer::new(&device, surface_format, width, height);
         let camera = Camera::new(width as f32 / height as f32);
-        let objects = scene::load_scene(&device);
+
+        // --- Physics setup ---
+        let aircraft_body = physics::create_aircraft_at_sfo();
+        let ref_pos = aircraft_body.pos_ecef;
+        let enu = aircraft_body.enu_frame;
+        let params = physics::AircraftParams::ki61();
+        let simulation = physics::Simulation::new(params, aircraft_body);
+        let sim_runner = sim::SimRunner::new(simulation);
+
+        // --- Scene setup ---
+        let mut objects = scene::load_scene(&device, ref_pos, &enu);
+        let aircraft_obj = scene::load_aircraft_object(&device, 1);
+        objects.push(aircraft_obj);
+        let aircraft_idx = objects.len() - 1;
+
+        let model_to_body = model_to_body_rotation();
 
         log::info!(
             "Loaded {} objects, surface format: {:?}",
@@ -129,6 +159,9 @@ impl ApplicationHandler for App {
             objects,
             last_frame: Instant::now(),
             cursor_grabbed: false,
+            sim_runner,
+            aircraft_idx,
+            model_to_body,
         });
     }
 
@@ -166,41 +199,36 @@ impl ApplicationHandler for App {
                         ..
                     },
                 ..
-            } => {
-                match key_state {
-                    ElementState::Pressed => {
-                        match key {
-                            KeyCode::Escape => {
-                                if state.cursor_grabbed {
-                                    // Release cursor
-                                    state.cursor_grabbed = false;
-                                    let _ = state
-                                        .window
-                                        .set_cursor_grab(winit::window::CursorGrabMode::None);
-                                    state.window.set_cursor_visible(true);
-                                } else {
-                                    event_loop.exit();
-                                }
-                            }
-                            KeyCode::F11 => {
-                                if state.window.fullscreen().is_some() {
-                                    state.window.set_fullscreen(None);
-                                } else {
-                                    state.window.set_fullscreen(Some(
-                                        Fullscreen::Borderless(None),
-                                    ));
-                                }
-                            }
-                            _ => {
-                                state.camera.key_down(key);
-                            }
+            } => match key_state {
+                ElementState::Pressed => match key {
+                    KeyCode::Escape => {
+                        if state.cursor_grabbed {
+                            state.cursor_grabbed = false;
+                            let _ = state
+                                .window
+                                .set_cursor_grab(winit::window::CursorGrabMode::None);
+                            state.window.set_cursor_visible(true);
+                        } else {
+                            event_loop.exit();
                         }
                     }
-                    ElementState::Released => {
-                        state.camera.key_up(key);
+                    KeyCode::F11 => {
+                        if state.window.fullscreen().is_some() {
+                            state.window.set_fullscreen(None);
+                        } else {
+                            state
+                                .window
+                                .set_fullscreen(Some(Fullscreen::Borderless(None)));
+                        }
                     }
+                    _ => {
+                        state.sim_runner.key_down(key);
+                    }
+                },
+                ElementState::Released => {
+                    state.sim_runner.key_up(key);
                 }
-            }
+            },
 
             WindowEvent::MouseInput {
                 state: ElementState::Pressed,
@@ -226,11 +254,26 @@ impl ApplicationHandler for App {
                 let dt = now.duration_since(state.last_frame).as_secs_f64();
                 state.last_frame = now;
 
-                state.camera.update(dt);
+                // Advance physics
+                state.sim_runner.update(dt);
 
-                let view = state.camera.view_matrix_at_origin();
+                // Get interpolated render state
+                let render_state = state.sim_runner.render_state();
+
+                // Update camera position to pilot eye
+                state.camera.position = state.sim_runner.camera_position(&render_state);
+
+                // View matrix from aircraft orientation
+                let view = sim::aircraft_view_matrix(render_state.orientation);
                 let proj = state.camera.projection_matrix();
 
+                // Update aircraft SceneObject from physics
+                let aircraft = &mut state.objects[state.aircraft_idx];
+                aircraft.world_pos = render_state.pos_ecef;
+                aircraft.rotation =
+                    sim::dquat_to_quat(render_state.orientation) * state.model_to_body;
+
+                // Render
                 let output = match state.surface.get_current_texture() {
                     Ok(t) => t,
                     Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
