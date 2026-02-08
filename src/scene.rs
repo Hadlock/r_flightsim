@@ -98,17 +98,9 @@ pub fn load_scene(device: &wgpu::Device) -> Vec<SceneObject> {
     let mut id = 1u32;
 
     // 10 teapots in a grid on Y=0, spaced ~1m apart
-    let teapot_positions: [(f64, f64, f64); 10] = [
+    let teapot_positions: [(f64, f64, f64); 1] = [
         (0.0, 0.0, 0.0),
-        (1.0, 0.0, 0.0),
-        (-1.0, 0.0, 0.0),
-        (0.0, 0.0, 1.0),
-        (0.0, 0.0, -1.0),
-        (1.0, 0.0, 1.0),
-        (-1.0, 0.0, 1.0),
-        (1.0, 0.0, -1.0),
-        (-1.0, 0.0, -1.0),
-        (0.0, 0.0, 2.0),
+
     ];
 
     for (i, &(x, y, z)) in teapot_positions.iter().enumerate() {
@@ -125,17 +117,8 @@ pub fn load_scene(device: &wgpu::Device) -> Vec<SceneObject> {
     }
 
     // 10 planes on Y=0, spaced ~20m apart
-    let plane_positions: [(f64, f64, f64); 10] = [
-        (20.0, 0.0, 0.0),
-        (20.0, 0.0, 20.0),
-        (20.0, 0.0, -20.0),
-        (40.0, 0.0, 0.0),
-        (40.0, 0.0, 20.0),
-        (40.0, 0.0, -20.0),
-        (-20.0, 0.0, 0.0),
-        (-20.0, 0.0, 20.0),
-        (-40.0, 0.0, 0.0),
-        (-40.0, 0.0, 20.0),
+    let plane_positions: [(f64, f64, f64); 1] = [
+        (0.0, 0.0, 0.0),
     ];
 
     for (i, &(x, y, z)) in plane_positions.iter().enumerate() {
@@ -150,6 +133,34 @@ pub fn load_scene(device: &wgpu::Device) -> Vec<SceneObject> {
         ));
         id += 1;
     }
+
+    /*
+    // Reference cubes: 1m, 10m, 30m — already real-world scale, no rotation.
+    // Placed along Z axis, 10m edge-to-edge gaps, sitting on Y=0.
+    let cube_1m = obj_loader::load_obj(Path::new("assets/1m_cube.obj"));
+    let cube_10m = obj_loader::load_obj(Path::new("assets/10m_cube.obj"));
+    let cube_30m = obj_loader::load_obj(Path::new("assets/30m_cube.obj"));
+
+    // 1m cube: center Y=0.5 so bottom is Y=0. Place at Z=10.
+    objects.push(spawn(
+        device, &cube_1m, "cube_1m",
+        DVec3::new(0.0, 0.5, 10.0), Quat::IDENTITY, 1.0, id,
+    ));
+    id += 1;
+
+    // 10m cube: 1m cube far edge at Z=10.5, +10m gap → near edge at Z=20.5, center at Z=25.5
+    objects.push(spawn(
+        device, &cube_10m, "cube_10m",
+        DVec3::new(0.0, 5.0, 25.5), Quat::IDENTITY, 1.0, id,
+    ));
+    id += 1;
+
+    // 30m cube: 10m cube far edge at Z=30.5, +10m gap → near edge at Z=40.5, center at Z=55.5
+    objects.push(spawn(
+        device, &cube_30m, "cube_30m",
+        DVec3::new(0.0, 15.0, 55.5), Quat::IDENTITY, 1.0, id,
+    ));*/
+    let _ = id;
 
     objects
 }

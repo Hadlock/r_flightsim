@@ -40,7 +40,7 @@ impl Camera {
     }
 
     pub fn mouse_move(&mut self, dx: f64, dy: f64) {
-        self.yaw += dx * self.mouse_sensitivity;
+        self.yaw -= dx * self.mouse_sensitivity;
         self.pitch -= dy * self.mouse_sensitivity;
         // Clamp pitch to avoid gimbal lock
         let limit = 89.0_f64.to_radians();
@@ -67,10 +67,10 @@ impl Camera {
             move_dir -= forward;
         }
         if self.keys_held.contains(&KeyCode::KeyD) {
-            move_dir += right;
+            move_dir -= right;
         }
         if self.keys_held.contains(&KeyCode::KeyA) {
-            move_dir -= right;
+            move_dir += right;
         }
         if self.keys_held.contains(&KeyCode::Space) {
             move_dir += up;
