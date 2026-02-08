@@ -8,7 +8,7 @@ use crate::scene::SceneObject;
 const UNIFORM_ALIGN: u64 = 256;
 
 /// Max objects we can render in one frame.
-const MAX_OBJECTS: u64 = 128;
+const MAX_OBJECTS: u64 = 2048;
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]

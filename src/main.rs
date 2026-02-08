@@ -1,3 +1,4 @@
+mod airport_gen;
 mod camera;
 mod coords;
 mod obj_loader;
@@ -134,7 +135,18 @@ impl ApplicationHandler for App {
 
         // --- Scene setup ---
         let mut objects = scene::load_scene(&device);
-        let aircraft_obj = scene::load_aircraft_object(&device, 1);
+
+        // --- Airport generation ---
+        let next_id = objects.iter().map(|o| o.object_id).max().unwrap_or(0) + 1;
+        let airport_json = std::path::Path::new("assets/airports/airports_all.json");
+        // Use aircraft start position as reference for nearby airport loading
+        let ref_ecef = sim_runner.render_state().pos_ecef;
+        let (airport_objects, _next_id) =
+            airport_gen::generate_airports(&device, airport_json, next_id, ref_ecef);
+        objects.extend(airport_objects);
+
+        // --- Aircraft (always last so aircraft_idx is stable) ---
+        let aircraft_obj = scene::load_aircraft_object(&device, _next_id);
         objects.push(aircraft_obj);
         let aircraft_idx = objects.len() - 1;
 
@@ -281,11 +293,15 @@ impl ApplicationHandler for App {
 
                 // Debug: print scene object positions for first 3 seconds
                 {
-                    static DEBUG_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-                    let count = DEBUG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    static DEBUG_COUNTER: std::sync::atomic::AtomicU32 =
+                        std::sync::atomic::AtomicU32::new(0);
+                    let count =
+                        DEBUG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     if count % 60 == 0 && count < 300 {
                         for obj in &state.objects {
-                            if obj.name == "aircraft" { continue; }
+                            if obj.name == "aircraft" {
+                                continue;
+                            }
                             let rel = obj.world_pos - state.camera.position;
                             let rel32 = rel.as_vec3();
                             let model = obj.model_matrix_relative_to(state.camera.position);
@@ -297,8 +313,12 @@ impl ApplicationHandler for App {
                             println!(
                                 "[debug] '{}' rel=({:.1},{:.1},{:.1}) {:.1}m ndc=({:.3},{:.3})",
                                 obj.name,
-                                rel32.x, rel32.y, rel32.z, rel32.length(),
-                                ndc_x, ndc_y,
+                                rel32.x,
+                                rel32.y,
+                                rel32.z,
+                                rel32.length(),
+                                ndc_x,
+                                ndc_y,
                             );
                         }
                     }

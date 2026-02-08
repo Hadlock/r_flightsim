@@ -80,7 +80,7 @@ fn spawn(
 /// Position and rotation are set to defaults — caller updates them each frame.
 pub fn load_aircraft_object(device: &wgpu::Device, object_id: u32) -> SceneObject {
     let mesh = obj_loader::load_obj(Path::new(
-        "assets/14082_WWII_Plane_Japan_Kawasaki_Ki-61_v1_L2.obj",
+        "assets/obj_static/14082_WWII_Plane_Japan_Kawasaki_Ki-61_v1_L2.obj",
     ));
     // Ki-61: 12m wingspan, OBJ wingspan extent is ~2.2019 units
     let scale = 12.0 / 2.2019;
@@ -228,7 +228,7 @@ pub fn load_scene(device: &wgpu::Device) -> Vec<SceneObject> {
         "14082_WWII_Plane_Japan_Kawasaki_Ki-61_v1_L2.obj",
     ];
 
-    let mut entries: Vec<_> = fs::read_dir("assets")
+    let mut entries: Vec<_> = fs::read_dir("assets/obj_static")
         .into_iter()
         .flatten()
         .flatten()

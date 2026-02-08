@@ -1,0 +1,506 @@
+  {
+    "ident": "KDFW",
+    "type": "large_airport",
+    "name": "Dallas Fort Worth International Airport",
+    "latitude": 32.896801,
+    "longitude": -97.038002,
+    "elevation_ft": 607,
+    "continent": "NA",
+    "continent_name": "North America",
+    "iso_country": "US",
+    "iso_region": "US-TX",
+    "municipality": "Dallas-Fort Worth",
+    "iata_code": "DFW",
+    "local_code": "DFW",
+    "runways": [
+      {
+        "length_ft": 9000,
+        "width_ft": 200,
+        "surface": "CON",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "13L",
+        "he_ident": "31R",
+        "le_heading_degT": 135.3,
+        "he_heading_degT": 315.3
+      },
+      {
+        "length_ft": 9300,
+        "width_ft": 150,
+        "surface": "CON",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "13R",
+        "he_ident": "31L",
+        "le_heading_degT": 139.0,
+        "he_heading_degT": 319.0
+      },
+      {
+        "length_ft": 13400,
+        "width_ft": 150,
+        "surface": "CON",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "17C",
+        "he_ident": "35C",
+        "le_heading_degT": 180.3,
+        "he_heading_degT": 0.3
+      },
+      {
+        "length_ft": 8500,
+        "width_ft": 150,
+        "surface": "CON",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "17L",
+        "he_ident": "35R",
+        "le_heading_degT": 180.3,
+        "he_heading_degT": 0.3
+      },
+      {
+        "length_ft": 13400,
+        "width_ft": 200,
+        "surface": "CON",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "17R",
+        "he_ident": "35L",
+        "le_heading_degT": 180.3,
+        "he_heading_degT": 0.3
+      },
+      {
+        "length_ft": 13401,
+        "width_ft": 200,
+        "surface": "CON",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "18L",
+        "he_ident": "36R",
+        "le_heading_degT": 180.2,
+        "he_heading_degT": 0.2
+      },
+      {
+        "length_ft": 13400,
+        "width_ft": 150,
+        "surface": "CON",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "18R",
+        "he_ident": "36L",
+        "le_heading_degT": 180.3,
+        "he_heading_degT": 0.3
+      }
+    ]
+  },
+  {
+    "ident": "KSFO",
+    "type": "large_airport",
+    "name": "San Francisco International Airport",
+    "latitude": 37.619806,
+    "longitude": -122.374821,
+    "elevation_ft": 13,
+    "continent": "NA",
+    "continent_name": "North America",
+    "iso_country": "US",
+    "iso_region": "US-CA",
+    "municipality": "San Francisco",
+    "iata_code": "SFO",
+    "local_code": "SFO",
+    "runways": [
+      {
+        "length_ft": 7650,
+        "width_ft": 200,
+        "surface": "ASP",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "01L",
+        "he_ident": "19R",
+        "le_heading_degT": 28.0,
+        "he_heading_degT": 208.0
+      },
+      {
+        "length_ft": 8650,
+        "width_ft": 200,
+        "surface": "ASP",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "01R",
+        "he_ident": "19L",
+        "le_heading_degT": 28.0,
+        "he_heading_degT": 208.0
+      },
+      {
+        "length_ft": 11870,
+        "width_ft": 200,
+        "surface": "ASP",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "10L",
+        "he_ident": "28R",
+        "le_heading_degT": 118.0,
+        "he_heading_degT": 298.0
+      },
+      {
+        "length_ft": 11381,
+        "width_ft": 200,
+        "surface": "ASP",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "10R",
+        "he_ident": "28L",
+        "le_heading_degT": 118.0,
+        "he_heading_degT": 298.0
+      }
+    ]
+  },
+  {
+    "ident": "KTRK",
+    "type": "medium_airport",
+    "name": "Truckee Tahoe Airport",
+    "latitude": 39.318628,
+    "longitude": -120.140562,
+    "elevation_ft": 5900,
+    "continent": "NA",
+    "continent_name": "North America",
+    "iso_country": "US",
+    "iso_region": "US-CA",
+    "municipality": "Truckee",
+    "iata_code": "TKF",
+    "local_code": "TRK",
+    "runways": [
+      {
+        "length_ft": 4650,
+        "width_ft": 75,
+        "surface": "ASP",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "02",
+        "he_ident": "20",
+        "le_heading_degT": 29.9,
+        "he_heading_degT": 209.9
+      },
+      {
+        "length_ft": 7001,
+        "width_ft": 100,
+        "surface": "ASP",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "11",
+        "he_ident": "29",
+        "le_heading_degT": 120.1,
+        "he_heading_degT": 300.1
+      }
+    ]
+  },
+   {
+    "ident": "KOAK",
+    "type": "large_airport",
+    "name": "San Francisco Bay Oakland International Airport",
+    "latitude": 37.720085,
+    "longitude": -122.221184,
+    "elevation_ft": 9,
+    "continent": "NA",
+    "continent_name": "North America",
+    "iso_country": "US",
+    "iso_region": "US-CA",
+    "municipality": "Oakland",
+    "iata_code": "OAK",
+    "local_code": "OAK",
+    "runways": [
+      {
+        "length_ft": 5457,
+        "width_ft": 150,
+        "surface": "ASP",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "10L",
+        "he_ident": "28R",
+        "le_heading_degT": 112.2,
+        "he_heading_degT": 292.2
+      },
+      {
+        "length_ft": 6213,
+        "width_ft": 150,
+        "surface": "ASP",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "10R",
+        "he_ident": "28L",
+        "le_heading_degT": 112.0,
+        "he_heading_degT": 292.0
+      },
+      {
+        "length_ft": 10520,
+        "width_ft": 150,
+        "surface": "ASP",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "12",
+        "he_ident": "30",
+        "le_heading_degT": 130.0,
+        "he_heading_degT": 310.0
+      },
+      {
+        "length_ft": 3376,
+        "width_ft": 75,
+        "surface": "ASP",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "15",
+        "he_ident": "33",
+        "le_heading_degT": 165.0,
+        "he_heading_degT": 345.0
+      }
+    ]
+  },
+    {
+    "ident": "KDVO",
+    "type": "small_airport",
+    "name": "Marin County Airport - Gnoss Field",
+    "latitude": 38.143600463867,
+    "longitude": -122.55599975586,
+    "elevation_ft": 2,
+    "continent": "NA",
+    "continent_name": "North America",
+    "iso_country": "US",
+    "iso_region": "US-CA",
+    "municipality": "Novato",
+    "iata_code": "NOT",
+    "local_code": "DVO",
+    "runways": [
+      {
+        "length_ft": 3303,
+        "width_ft": 75,
+        "surface": "ASP",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "13",
+        "he_ident": "31",
+        "le_heading_degT": 148.0,
+        "he_heading_degT": 328.0
+      }
+    ]
+  },
+    {
+    "ident": "KNUI",
+    "type": "small_airport",
+    "name": "Naval Outlying Landing Field Webster",
+    "latitude": 38.144222,
+    "longitude": -76.426892,
+    "elevation_ft": 22,
+    "continent": "NA",
+    "continent_name": "North America",
+    "iso_country": "US",
+    "iso_region": "US-MD",
+    "municipality": "St Inigoes",
+    "iata_code": "",
+    "local_code": "NUI",
+    "runways": [
+      {
+        "length_ft": 5000,
+        "width_ft": 150,
+        "surface": "ASP",
+        "lighted": false,
+        "closed": false,
+        "le_ident": "08",
+        "he_ident": "26",
+        "le_heading_degT": 66.0,
+        "he_heading_degT": 246.0
+      },
+      {
+        "length_ft": 5000,
+        "width_ft": 150,
+        "surface": "ASP",
+        "lighted": false,
+        "closed": false,
+        "le_ident": "15",
+        "he_ident": "33",
+        "le_heading_degT": 142.0,
+        "he_heading_degT": 322.0
+      }
+    ]
+  },
+  {
+    "ident": "KNUQ",
+    "type": "medium_airport",
+    "name": "Moffett Federal Airfield",
+    "latitude": 37.4161,
+    "longitude": -122.049004,
+    "elevation_ft": 32,
+    "continent": "NA",
+    "continent_name": "North America",
+    "iso_country": "US",
+    "iso_region": "US-CA",
+    "municipality": "Mountain View",
+    "iata_code": "NUQ",
+    "local_code": "NUQ",
+    "runways": [
+      {
+        "length_ft": 9197,
+        "width_ft": 200,
+        "surface": "CON",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "14L",
+        "he_ident": "32R",
+        "le_heading_degT": 157.7,
+        "he_heading_degT": 337.7
+      },
+      {
+        "length_ft": 8121,
+        "width_ft": 200,
+        "surface": "ASP",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "14R",
+        "he_ident": "32L",
+        "le_heading_degT": 157.7,
+        "he_heading_degT": 337.7
+      }
+    ]
+  },
+  {
+    "ident": "KNUW",
+    "type": "medium_airport",
+    "name": "Whidbey Island Naval Air Station (Ault Field)",
+    "latitude": 48.351799,
+    "longitude": -122.655998,
+    "elevation_ft": 47,
+    "continent": "NA",
+    "continent_name": "North America",
+    "iso_country": "US",
+    "iso_region": "US-WA",
+    "municipality": "Oak Harbor",
+    "iata_code": "NUW",
+    "local_code": "NUW",
+    "runways": [
+      {
+        "length_ft": 7999,
+        "width_ft": 200,
+        "surface": "CON",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "07",
+        "he_ident": "25",
+        "le_heading_degT": 87.0,
+        "he_heading_degT": 267.0
+      },
+      {
+        "length_ft": 8001,
+        "width_ft": 200,
+        "surface": "CONC",
+        "lighted": false,
+        "closed": false,
+        "le_ident": "14",
+        "he_ident": "32",
+        "le_heading_degT": 155.0,
+        "he_heading_degT": 335.0
+      }
+    ]
+  },
+  {
+    "ident": "KNVD",
+    "type": "small_airport",
+    "name": "Nevada Municipal Airport",
+    "latitude": 37.8521,
+    "longitude": -94.304901,
+    "elevation_ft": 892,
+    "continent": "NA",
+    "continent_name": "North America",
+    "iso_country": "US",
+    "iso_region": "US-MO",
+    "municipality": "Nevada",
+    "iata_code": "NVD",
+    "local_code": "NVD",
+    "runways": [
+      {
+        "length_ft": 5000,
+        "width_ft": 75,
+        "surface": "ASP",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "02",
+        "he_ident": "20",
+        "le_heading_degT": 26.5,
+        "he_heading_degT": 206.5
+      },
+      {
+        "length_ft": 2581,
+        "width_ft": 40,
+        "surface": "ASP",
+        "lighted": false,
+        "closed": false,
+        "le_ident": "13",
+        "he_ident": "31",
+        "le_heading_degT": 135.4,
+        "he_heading_degT": 315.4
+      }
+    ]
+  },
+  {
+    "ident": "KNVI",
+    "type": "heliport",
+    "name": "Pace Nolf Heliport",
+    "latitude": 30.699699401900002,
+    "longitude": -87.195602417,
+    "elevation_ft": 180,
+    "continent": "NA",
+    "continent_name": "North America",
+    "iso_country": "US",
+    "iso_region": "US-FL",
+    "municipality": "Wallace",
+    "iata_code": "",
+    "local_code": "NVI",
+    "runways": [
+      {
+        "length_ft": 3000,
+        "width_ft": 3000,
+        "surface": "TURF",
+        "lighted": false,
+        "closed": false,
+        "le_ident": "H1",
+        "he_ident": "H1",
+        "le_heading_degT": null,
+        "he_heading_degT": null
+      }
+    ]
+  },
+  {
+    "ident": "KNWL",
+    "type": "small_airport",
+    "name": "Waldron Field Naval Outlying Landing Field",
+    "latitude": 27.635,
+    "longitude": -97.312202,
+    "elevation_ft": 25,
+    "continent": "NA",
+    "continent_name": "North America",
+    "iso_country": "US",
+    "iso_region": "US-TX",
+    "municipality": "Corpus Christi",
+    "iata_code": "",
+    "local_code": "NWL",
+    "runways": [
+      {
+        "length_ft": 4365,
+        "width_ft": 150,
+        "surface": "ASP",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "13",
+        "he_ident": "31",
+        "le_heading_degT": 135.3,
+        "he_heading_degT": 315.3
+      },
+      {
+        "length_ft": 5000,
+        "width_ft": 200,
+        "surface": "ASP",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "17",
+        "he_ident": "35",
+        "le_heading_degT": 180.0,
+        "he_heading_degT": 360.0
+      }
+    ]
+  },
