@@ -49,12 +49,13 @@ neither are skipped.
 
 For every non-heliport airport:
 
-1. **Runways** — flat rectangles (0.3m thick) at field elevation, oriented by
-   `le_heading_degT`. All runways for one airport are merged into a single
+1. **Runways** — flat rectangles (0.01m thick) at field elevation, oriented by
+   `le_heading_degT`. Parallel runways (within 5° heading) are offset laterally
+   at least 230m apart. All runways for one airport are merged into a single
    `SceneObject` (`{IDENT}_runways`).
 
 2. **Buildings** — merged into a single `SceneObject` (`{IDENT}_buildings`):
-   - **ATC tower**: 10×10×30m (always 1)
+   - **ATC tower**: 10×10×120m (always 1)
    - **Hangar type 1**: 45×80×20m
    - **Hangar type 2**: 40×70×15m
    - **Admin building**: 33×33×10m

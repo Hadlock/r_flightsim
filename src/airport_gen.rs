@@ -385,11 +385,6 @@ pub fn generate_airports(
         // Compute ENU→ECEF rotation quaternion for this airport
         let enu_quat = enu_to_ecef_quat(apt_lla.lat, apt_lla.lon);
 
-        // ── Build combined mesh for all runways ──
-        let mut combined_mesh = MeshData {
-            vertices: Vec::new(),
-            indices: Vec::new(),
-        };
         let mut runway_footprints: Vec<Footprint> = Vec::new();
 
         // Find the longest runway heading (for building alignment)
@@ -403,45 +398,115 @@ pub fn generate_airports(
             })
             .unwrap();
         let primary_heading_deg = longest_rwy.heading_deg().unwrap_or(0.0);
-        // Convert compass heading to math angle: heading is CW from north,
-        // our ENU Y=north so angle from +Y axis.
-        // In ENU: angle_from_east = 90 - heading
         let primary_angle_rad = (90.0 - primary_heading_deg).to_radians();
 
-        for rwy in &valid_runways {
+        // ── Group parallel runways and compute lateral offsets ──
+        const MIN_PARALLEL_SEP: f64 = 230.0;
+        // Offset between heading groups along the primary runway direction,
+        // so crossing zones are clearly separated (visible # pattern).
+        const GROUP_SPREAD: f64 = 500.0;
+
+        fn normalise_hdg(h: f64) -> f64 {
+            ((h % 360.0) + 360.0) % 360.0
+        }
+
+        // Group by heading (parallel if within 5°)
+        let mut groups: Vec<(f64, Vec<usize>)> = Vec::new();
+        for (i, rwy) in valid_runways.iter().enumerate() {
+            let hdg = normalise_hdg(rwy.heading_deg().unwrap_or(0.0));
+            let mut found = false;
+            for (_gi, (group_hdg, members)) in groups.iter_mut().enumerate() {
+                let diff = (hdg - *group_hdg + 540.0) % 360.0 - 180.0;
+                if diff.abs() < 5.0 {
+                    members.push(i);
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                groups.push((hdg, vec![i]));
+            }
+        }
+
+        // Compute ENU offset for each runway, then convert to a separate ECEF position.
+        // Each runway becomes its own SceneObject — no vertex translation, just distinct world_pos.
+        let enu_frame = coords::enu_frame_at(apt_lla.lat, apt_lla.lon, apt_ecef);
+
+        // Primary heading direction in ENU (used to offset secondary groups)
+        let primary_dir_east = primary_angle_rad.cos();
+        let primary_dir_north = primary_angle_rad.sin();
+
+        struct RwyInfo {
+            idx: usize,
+            offset_east: f64,
+            offset_north: f64,
+        }
+        let mut rwy_infos: Vec<RwyInfo> = Vec::new();
+
+        for (gi, (group_hdg, members)) in groups.iter().enumerate() {
+            let angle_rad = (90.0 - group_hdg).to_radians();
+            // Perpendicular to runway heading in ENU (for L/R separation)
+            let perp_east = -(angle_rad.sin());
+            let perp_north = angle_rad.cos();
+
+            // Offset secondary groups along the primary heading direction.
+            // This shifts the crossing zone away from center, making the #
+            // pattern clearly visible instead of all crossings at one point.
+            let group_shift = gi as f64 * GROUP_SPREAD;
+            let group_offset_east = group_shift * primary_dir_east;
+            let group_offset_north = group_shift * primary_dir_north;
+
+            let n = members.len();
+            for (rank, &idx) in members.iter().enumerate() {
+                let lateral = (rank as f64 - (n as f64 - 1.0) * 0.5) * MIN_PARALLEL_SEP;
+                rwy_infos.push(RwyInfo {
+                    idx,
+                    offset_east: lateral * perp_east + group_offset_east,
+                    offset_north: lateral * perp_north + group_offset_north,
+                });
+            }
+        }
+
+        // Create each runway as a separate SceneObject with its own ECEF position
+        for ri in &rwy_infos {
+            let rwy = &valid_runways[ri.idx];
             let length_m = rwy.length_ft.unwrap_or(0.0) * FT_TO_M;
             let width_m = rwy.width_ft.unwrap_or(0.0) * FT_TO_M;
             let heading_deg = rwy.heading_deg().unwrap_or(0.0);
             let angle_rad = (90.0 - heading_deg).to_radians();
 
+            // Mesh at origin, just rotated to heading
             let mut mesh = make_runway_mesh(width_m as f32, length_m as f32);
             rotate_mesh_z(&mut mesh, angle_rad as f32);
-            merge_mesh(&mut combined_mesh, &mesh);
 
-            runway_footprints.push(Footprint {
-                cx: 0.0,
-                cy: 0.0,
-                half_w: width_m * 0.5 + 5.0,
-                half_d: length_m * 0.5 + 5.0,
-                angle: angle_rad,
-            });
-        }
+            // Compute this runway's ECEF position from its ENU offset
+            let enu_offset = DVec3::new(ri.offset_east, ri.offset_north, 0.0);
+            let rwy_ecef = apt_ecef + enu_frame.enu_to_ecef(enu_offset);
 
-        // Upload runway mesh as a SceneObject
-        if !combined_mesh.vertices.is_empty() {
-            let bufs = upload_mesh(device, &combined_mesh, &format!("{}_runways", airport.ident));
+            let bufs = upload_mesh(device, &mesh, &format!("{}_{}", airport.ident,
+                rwy.le_ident.as_deref().unwrap_or("rwy")));
             objects.push(SceneObject {
-                name: format!("{}_runways", airport.ident),
+                name: format!("{}_{}", airport.ident,
+                    rwy.le_ident.as_deref().unwrap_or("rwy")),
                 vertex_buf: bufs.0,
                 index_buf: bufs.1,
                 index_count: bufs.2,
-                world_pos: apt_ecef,
+                world_pos: rwy_ecef,
                 rotation: enu_quat,
                 scale: 1.0,
                 object_id: obj_id,
                 edges_enabled: true,
             });
             obj_id += 1;
+
+            // Track footprint in ENU for building placement
+            runway_footprints.push(Footprint {
+                cx: ri.offset_east,
+                cy: ri.offset_north,
+                half_w: width_m * 0.5 + 5.0,
+                half_d: length_m * 0.5 + 5.0,
+                angle: angle_rad,
+            });
         }
 
         // ── Determine building counts by airport size ──
@@ -453,7 +518,7 @@ pub fn generate_airports(
         };
 
         // Building specs
-        let atc = BuildingSpec { width: 10.0, depth: 10.0, height: 30.0, label: "atc" };
+        let atc = BuildingSpec { width: 10.0, depth: 10.0, height: 120.0, label: "atc" };
         let hangar1 = BuildingSpec { width: 45.0, depth: 80.0, height: 20.0, label: "hangar1" };
         let hangar2 = BuildingSpec { width: 40.0, depth: 70.0, height: 15.0, label: "hangar2" };
         let admin = BuildingSpec { width: 33.0, depth: 33.0, height: 10.0, label: "admin" };
