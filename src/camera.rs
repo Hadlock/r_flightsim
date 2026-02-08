@@ -18,7 +18,7 @@ pub struct Camera {
 impl Camera {
     pub fn new(aspect: f32) -> Self {
         Self {
-            position: DVec3::new(0.0, 2.0, -10.0),
+            position: DVec3::new(0.0, 0.3, -1.5),
             yaw: 0.0,
             pitch: 0.0,
             fov_deg: 115.0,

@@ -26,92 +26,129 @@ impl SceneObject {
     }
 }
 
-/// Shared mesh data that multiple SceneObjects can reference
-struct SharedMesh {
+struct MeshBuffers {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
     index_count: u32,
 }
 
-fn create_shared_mesh(device: &wgpu::Device, mesh: &MeshData) -> SharedMesh {
+fn upload_mesh(device: &wgpu::Device, mesh: &MeshData, label: &str) -> MeshBuffers {
     let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Shared Vertex Buffer"),
+        label: Some(&format!("{} Vertex Buffer", label)),
         contents: bytemuck::cast_slice(&mesh.vertices),
         usage: wgpu::BufferUsages::VERTEX,
     });
-
     let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Shared Index Buffer"),
+        label: Some(&format!("{} Index Buffer", label)),
         contents: bytemuck::cast_slice(&mesh.indices),
         usage: wgpu::BufferUsages::INDEX,
     });
-
-    SharedMesh {
+    MeshBuffers {
         vertex_buf,
         index_buf,
         index_count: mesh.indices.len() as u32,
     }
 }
 
-pub fn load_scene(device: &wgpu::Device) -> Vec<SceneObject> {
-    let obj_path = Path::new("assets/teapot.obj");
-    let mesh = obj_loader::load_obj(obj_path);
+fn spawn(
+    device: &wgpu::Device,
+    mesh: &MeshData,
+    name: &str,
+    pos: DVec3,
+    rotation: Quat,
+    scale: f32,
+    object_id: u32,
+) -> SceneObject {
+    let bufs = upload_mesh(device, mesh, name);
+    SceneObject {
+        name: name.to_string(),
+        vertex_buf: bufs.vertex_buf,
+        index_buf: bufs.index_buf,
+        index_count: bufs.index_count,
+        world_pos: pos,
+        rotation,
+        scale,
+        object_id,
+        edges_enabled: true,
+    }
+}
 
-    // Create one shared GPU buffer set
-    let shared = create_shared_mesh(device, &mesh);
+pub fn load_scene(device: &wgpu::Device) -> Vec<SceneObject> {
+    let teapot_mesh = obj_loader::load_obj(Path::new("assets/teapot.obj"));
+    let plane_mesh = obj_loader::load_obj(Path::new(
+        "assets/14082_WWII_Plane_Japan_Kawasaki_Ki-61_v1_L2.obj",
+    ));
+
+    // Teapot OBJ: X=spout-to-handle(6.43), Y=height(3.15, up), Z=front-back(4.0)
+    // Already Y-up, no rotation needed.
+    // Real teapot: 0.35m long → scale = 0.35 / 6.434
+    let teapot_scale = 0.35 / 6.434;
+
+    // Plane OBJ: X=nose-to-tail(1.59), Y=wingspan(2.20), Z=height(0.62)
+    // Need: X→World Z (north), Y→World X (east), Z→World Y (up)
+    // This is a -120° rotation around the (1,1,1) axis.
+    let plane_rot = Quat::from_axis_angle(
+        glam::Vec3::new(1.0, 1.0, 1.0).normalize(),
+        -2.0 * std::f32::consts::FRAC_PI_3,
+    );
+    // Real Ki-61: 8.94m long, 12m wingspan → scale from wingspan: 12.0 / 2.2019
+    let plane_scale = 12.0 / 2.2019;
 
     let mut objects = Vec::new();
+    let mut id = 1u32;
 
-    // Place 10 teapots in a grid pattern
-    let positions: [(f64, f64, f64); 10] = [
+    // 10 teapots in a grid on Y=0, spaced ~1m apart
+    let teapot_positions: [(f64, f64, f64); 10] = [
         (0.0, 0.0, 0.0),
-        (8.0, 0.0, 0.0),
-        (-8.0, 0.0, 0.0),
-        (0.0, 0.0, 8.0),
-        (0.0, 0.0, -8.0),
-        (8.0, 0.0, 8.0),
-        (-8.0, 0.0, 8.0),
-        (8.0, 0.0, -8.0),
-        (-8.0, 0.0, -8.0),
-        (0.0, 4.0, 0.0),
+        (1.0, 0.0, 0.0),
+        (-1.0, 0.0, 0.0),
+        (0.0, 0.0, 1.0),
+        (0.0, 0.0, -1.0),
+        (1.0, 0.0, 1.0),
+        (-1.0, 0.0, 1.0),
+        (1.0, 0.0, -1.0),
+        (-1.0, 0.0, -1.0),
+        (0.0, 0.0, 2.0),
     ];
 
-    for (i, &(x, y, z)) in positions.iter().enumerate() {
-        // Each object needs its own buffer references for rendering,
-        // but we can share the underlying data by creating new buffers
-        // pointing to the same data. For 10 objects this is fine.
-        let vertex_buf = if i == 0 {
-            // Reuse the shared buffer for the first object
-            shared.vertex_buf.clone()
-        } else {
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(&format!("Teapot {} Vertex Buffer", i)),
-                contents: bytemuck::cast_slice(&mesh.vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            })
-        };
+    for (i, &(x, y, z)) in teapot_positions.iter().enumerate() {
+        objects.push(spawn(
+            device,
+            &teapot_mesh,
+            &format!("teapot_{}", i),
+            DVec3::new(x, y, z),
+            Quat::IDENTITY,
+            teapot_scale as f32,
+            id,
+        ));
+        id += 1;
+    }
 
-        let index_buf = if i == 0 {
-            shared.index_buf.clone()
-        } else {
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(&format!("Teapot {} Index Buffer", i)),
-                contents: bytemuck::cast_slice(&mesh.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            })
-        };
+    // 10 planes on Y=0, spaced ~20m apart
+    let plane_positions: [(f64, f64, f64); 10] = [
+        (20.0, 0.0, 0.0),
+        (20.0, 0.0, 20.0),
+        (20.0, 0.0, -20.0),
+        (40.0, 0.0, 0.0),
+        (40.0, 0.0, 20.0),
+        (40.0, 0.0, -20.0),
+        (-20.0, 0.0, 0.0),
+        (-20.0, 0.0, 20.0),
+        (-40.0, 0.0, 0.0),
+        (-40.0, 0.0, 20.0),
+    ];
 
-        objects.push(SceneObject {
-            name: format!("teapot_{}", i),
-            vertex_buf,
-            index_buf,
-            index_count: shared.index_count,
-            world_pos: DVec3::new(x, y, z),
-            rotation: Quat::IDENTITY,
-            scale: 1.0,
-            object_id: (i + 1) as u32, // 0 reserved for "no object"
-            edges_enabled: true,
-        });
+    for (i, &(x, y, z)) in plane_positions.iter().enumerate() {
+        objects.push(spawn(
+            device,
+            &plane_mesh,
+            &format!("plane_{}", i),
+            DVec3::new(x, y, z),
+            plane_rot,
+            plane_scale as f32,
+            id,
+        ));
+        id += 1;
     }
 
     objects
