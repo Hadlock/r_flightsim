@@ -1,5 +1,6 @@
 # Great Pyramid landmark
 # origin: 37°36'57.5"N 122°23'16.6"W
+# convention: enu
 # base: 230m, height: 150m
 v -115.0 -115.0 0.0
 v  115.0 -115.0 0.0

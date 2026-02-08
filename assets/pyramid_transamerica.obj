@@ -1,5 +1,6 @@
 # Transamerica Pyramid landmark
 # origin: 37.795200, -122.402800
+# convention: enu
 # base: 53m, height: 260m
 v -26.5 -26.5 0.0
 v  26.5 -26.5 0.0

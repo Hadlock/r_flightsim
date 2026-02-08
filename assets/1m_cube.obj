@@ -1,5 +1,6 @@
 # 1m cube — near threshold, 50m south of centerline
 # origin: 37°36'46.1"N 122°21'39.5"W
+# convention: enu
 v -0.5 -0.5 0.0
 v  0.5 -0.5 0.0
 v  0.5  0.5 0.0

@@ -1,229 +1,238 @@
-# CLAUDE.md — Landmarks, OBJ Origin System, Pyramid Generation
+# CLAUDE.md — Fix Object Placement (Teapots + Origin Parsing)
 
-## Overview
-Add landmark objects to the scene: three existing cubes and three new pyramids. Implement an origin-tag system that reads `# origin:` comments from OBJ files to automatically place them in the world via ECEF coordinates.
+## Problem
+1. Teapots are hardcoded relative to `ref_pos` (aircraft start), not using `# origin:` tags. They appear glued to the plane's starting position rather than fixed in the world.
+2. The origin parser likely fails on the degree symbol. The OBJ files contain `°` (UTF-8 U+00B0, 2 bytes: 0xC2 0xB0), but the parser searches for `Â°` (the mojibake version where UTF-8 bytes get misinterpreted as Latin-1). This means ALL DMS-format origins silently fail to parse, so no cubes or pyramids load.
+3. Only objects whose origins are in decimal format (like `37.795200, -122.402800`) would parse successfully.
 
-## Task 1: Generate Three Pyramid OBJ Files
+## Fix 1: Make Teapot Use `# origin:` Tag
 
-Create these files in `assets/`. Each pyramid is a square-base pyramid (5 vertices, 6 triangular faces). The OBJ geometry is centered at (0,0,0) in local coordinates, using ENU convention for the vertex layout: X=east, Y=north, Z=up. The base sits on Z=0 (ground), apex at Z=height.
+The teapot.obj already has `# origin: 37°36'52.2"N 122°21'32.2"W`. Remove the hardcoded teapot placement from `load_scene()` entirely. Let it be auto-loaded like all other landmarks.
 
-### Pyramid 1: Great Pyramid (Giza-scale)
-**File:** `assets/pyramid_giza.obj`
-```
-# Great Pyramid landmark
-# origin: 37°36'57.5"N 122°23'16.6"W
-# base: 230m, height: 150m
-```
-- Base corners at Z=0: (±115, ±115, 0) — four combinations
-- Apex at (0, 0, 150)
-- Half-base = 115.0
-
-### Pyramid 2: Transamerica-scale
-**File:** `assets/pyramid_transamerica.obj`
-```
-# Transamerica Pyramid landmark
-# origin: 37.795200, -122.402800
-# base: 53m, height: 260m
-```
-- Base corners at Z=0: (±26.5, ±26.5, 0)
-- Apex at (0, 0, 260)
-- Half-base = 26.5
-
-### Pyramid 3: Mountain-scale
-**File:** `assets/pyramid_mountain.obj`
-```
-# Mountain pyramid landmark
-# origin: 37°55'44.5"N 122°34'40.0"W
-# base: 10000m, height: 784m
-```
-- Base corners at Z=0: (±5000, ±5000, 0)
-- Apex at (0, 0, 784)
-- Half-base = 5000.0
-
-### OBJ Vertex/Face Template
-All three pyramids use the same topology, just different dimensions. For half-base `h` and height `H`:
-
-```obj
-# [title comment]
-# origin: [coordinates]
-v -h -h 0.0
-v  h -h 0.0
-v  h  h 0.0
-v -h  h 0.0
-v  0.0  0.0 H
-
-vn 0 0 -1
-# face normals computed below
-
-# Base (two triangles, facing down, normal -Z)
-f 1//1 3//1 2//1
-f 1//1 4//1 3//1
-
-# South face (v1, v2, v5)
-f 1 2 5
-# East face (v2, v3, v5)
-f 2 3 5
-# North face (v3, v4, v5)
-f 3 4 5
-# West face (v4, v1, v5)
-f 4 1 5
+Remove the teapot from the `skip` list in `load_scene()`:
+```rust
+let skip = [
+    "14082_WWII_Plane_Japan_Kawasaki_Ki-61_v1_L2.obj",
+];
 ```
 
-Note: Don't include normals on the side faces — let `obj_loader.rs` compute smooth normals (it already does this). Only include the base normal explicitly if desired, or just let the smooth normal pass handle everything. Simplest: omit all `vn` lines and `//n` references, let the loader compute normals.
+Delete the entire teapot hardcoded block (the `teapot_mesh`, `teapot_scale`, `teapot_rotation`, and the `for i in 0..10` loop).
 
-Simplest OBJ format (no normals, loader computes them):
-```obj
-# [title]
-# origin: 37°36'57.5"N 122°23'16.6"W
-v -115.0 -115.0 0.0
-v  115.0 -115.0 0.0
-v  115.0  115.0 0.0
-v -115.0  115.0 0.0
-v  0.0  0.0  150.0
-f 1 3 2
-f 1 4 3
-f 1 2 5
-f 2 3 5
-f 3 4 5
-f 4 1 5
-```
+The teapot OBJ uses Y-up convention (like most modeling software), NOT ENU Z-up. We'll handle this below.
 
-## Task 2: Rename Cube Files
+## Fix 2: Fix Degree Symbol Parsing
 
-Rename in `assets/`:
-- `1m_cube.txt` → `1m_cube.obj`
-- `10m_cube.txt` → `10m_cube.obj`
-- `30m_cube.txt` → `30m_cube.obj`
+In `scene.rs`, the `parse_dms_component` function searches for `'Â°'` which is wrong. It needs to search for `'°'` (Unicode U+00B0).
 
-## Task 3: Origin Tag Parser
+**Replace the degree symbol handling in `parse_dms_component`:**
 
-Create a new function in `scene.rs` (or a small helper module) that:
-
-1. Reads the first ~10 lines of an OBJ file looking for `# origin:` comments
-2. Parses the coordinates in either format:
-   - DMS: `37°36'57.5"N 122°23'16.6"W`
-   - Decimal: `37.795200, -122.402800`
-3. Returns an `Option<LLA>` (alt = 0.0 for ground objects)
-
-### Parser Details
+The issue is likely that the source code itself has the wrong character. The fix:
 
 ```rust
-/// Parse an origin comment from an OBJ file.
-/// Supports two formats:
-///   # origin: 37°36'57.5"N 122°23'16.6"W
-///   # origin: 37.795200, -122.402800
-pub fn parse_origin(path: &Path) -> Option<LLA>
-```
+fn parse_dms_component(s: &str) -> Option<f64> {
+    let s = s.trim();
+    let direction = s.chars().last()?;
+    if !matches!(direction, 'N' | 'S' | 'E' | 'W') {
+        return None;
+    }
+    let s = &s[..s.len() - direction.len_utf8()];
 
-**DMS parsing:**
-- Pattern: `DD°MM'SS.S"N/S DDD°MM'SS.S"E/W`
-- Degrees = DD + MM/60 + SS.S/3600
-- S and W are negative
-- The degree symbol may be `°` (UTF-8) or similar
+    // Find degree symbol: handle both ° (U+00B0) and any multi-byte variant
+    let deg_end = s.find('\u{00B0}')?;  // Unicode degree sign
+    let deg_symbol_len = '\u{00B0}'.len_utf8(); // 2 bytes in UTF-8
+    let min_end = s.find('\'')?;
+    let sec_end = s.find('"')?;
 
-**Decimal parsing:**
-- Pattern: two comma-separated floats
-- First is latitude, second is longitude
-- Negative values for S/W (no N/S/E/W suffix)
+    let degrees: f64 = s[..deg_end].parse().ok()?;
+    let minutes: f64 = s[deg_end + deg_symbol_len..min_end].parse().ok()?;
+    let seconds: f64 = s[min_end + 1..sec_end].parse().ok()?;
 
-Both formats: altitude defaults to 0.0 (ground level on ellipsoid).
-
-**Important:** Return latitude and longitude in **radians** in the LLA struct (matching the existing convention in coords.rs).
-
-## Task 4: Update `scene.rs` — Auto-Load All OBJ Landmarks
-
-Replace the current hardcoded teapot loading in `load_scene()` with a system that:
-
-1. Scans `assets/` directory for all `.obj` files
-2. Skips the aircraft OBJ (hardcoded name or a skip-list)
-3. For each OBJ with a valid `# origin:` tag:
-   - Parse the origin → LLA → ECEF position
-   - Load the mesh
-   - Place it in the world at that ECEF position
-   - The OBJ local frame is ENU (X=east, Y=north, Z=up), so the rotation must transform from local ENU to ECEF at that location
-
-### ENU-to-ECEF Rotation for Static Objects
-
-This is critical. The OBJ vertices are in ENU coordinates (X=east, Y=north, Z=up) at the object's origin. To render them correctly in ECEF world space, the SceneObject rotation must encode the ENU→ECEF rotation at that lat/lon.
-
-```rust
-fn enu_to_ecef_quat(lat_rad: f64, lon_rad: f64) -> Quat {
-    let enu = coords::enu_frame_at(lat_rad, lon_rad, DVec3::ZERO);
-    // Build rotation matrix: columns are where ENU X,Y,Z axes go in ECEF
-    // ENU X (east) → enu.east in ECEF
-    // ENU Y (north) → enu.north in ECEF
-    // ENU Z (up) → enu.up in ECEF
-    let mat = glam::DMat3::from_cols(enu.east, enu.north, enu.up);
-    let dq = glam::DQuat::from_mat3(&mat);
-    Quat::from_xyzw(dq.x as f32, dq.y as f32, dq.z as f32, dq.w as f32)
+    let mut value = degrees + minutes / 60.0 + seconds / 3600.0;
+    if direction == 'S' || direction == 'W' {
+        value = -value;
+    }
+    Some(value)
 }
 ```
 
-Each static SceneObject gets:
-- `world_pos`: ECEF position from `lla_to_ecef(origin_lla)`
-- `rotation`: `enu_to_ecef_quat(origin_lla.lat, origin_lla.lon)`  
-- `scale`: `1.0` (OBJ vertices are already in meters)
-
-### Placement Relative to Runway
-
-The aircraft starts at SFO heading 280°. Looking out the windshield:
-- **Left side (south of runway):** Place the three cubes
-- **Right side (north of runway):** The teapots are already there
-
-The cubes have their own `# origin:` comments already. Verify the cube origins put them to the left (south) of the runway centerline. If they need adjusting, update the origin comments in the cube OBJ files. The cubes should be visible from the cockpit during the takeoff roll.
-
-Current cube origins from the files:
-- 1m cube: `37°38'37.3"N 122°34'18.1"W` — this is ~5km northwest, might be too far. Move closer if needed.
-- 10m cube: `37.643700, -122.571700` — this is way west over the ocean. Fix this.
-- 30m cube: `37°36'53.1"N 122°21'56.1"W` — east of SFO
-
-**Update cube origins** to be south of the runway, visible during takeoff roll at SFO 28L. The runway is at approximately 37.6139°N, 122.358°W heading 280°. Place cubes ~50-200m south of centerline, spaced along the runway:
-
-```
-# 1m cube — near threshold, 50m south of centerline
-# origin: 37.6135, -122.3575
-
-# 10m cube — 300m down runway, 100m south  
-# origin: 37.6130, -122.3610
-
-# 30m cube — 600m down runway, 150m south
-# origin: 37.6125, -122.3650
+Also fix `parse_dms` which checks for `'Â°'`:
+```rust
+fn parse_dms(s: &str) -> Option<LLA> {
+    if !s.contains('\u{00B0}') {  // Unicode degree sign
+        return None;
+    }
+    // ... rest unchanged
+}
 ```
 
-Update the `# origin:` comments in the three cube OBJ files to these positions.
+## Fix 3: Handle Y-up vs Z-up OBJ Convention
 
-### Keep Teapots
-Keep teapots in the scene too. They already have hardcoded positions (10m east of reference, every 100m north). Convert teapots to also use the origin-tag system, OR keep them hardcoded — either is fine. The important thing is they remain visible to the right during takeoff.
+The OBJ files fall into two categories:
+- **Custom landmarks** (cubes, pyramids): Created by us in ENU convention (X=east, Y=north, Z=up). These get `enu_to_ecef_quat` rotation only.
+- **Downloaded models** (teapot, and potentially others): Standard Y-up convention (X=right, Y=up, Z=forward or similar). These need a Y-up→Z-up rotation BEFORE the ENU→ECEF rotation.
 
-## Task 5: Update `obj_loader.rs` — Handle Missing Normals
+Add a second comment tag to distinguish. Use `# convention:` with values `enu` or `yup`:
 
-The pyramid OBJs won't have normals. The loader already computes smooth normals as a fallback, so this should just work. But verify: if an OBJ has no `vn` lines, the loader should still produce valid vertices with computed normals. The current code initializes normals to `[0,0,0]` and then overwrites with computed smooth normals — this is correct.
+For our custom OBJs (cubes, pyramids), add:
+```
+# convention: enu
+```
 
-## Summary of File Changes
+For the teapot (Y-up), add:
+```
+# convention: yup
+```
 
-### New files:
-- `assets/pyramid_giza.obj`
-- `assets/pyramid_transamerica.obj`
-- `assets/pyramid_mountain.obj`
+If no convention tag is present, default to `enu` (since most of our objects use it).
 
-### Renamed files:
-- `assets/1m_cube.txt` → `assets/1m_cube.obj` (also update origin comment)
-- `assets/10m_cube.txt` → `assets/10m_cube.obj` (also update origin comment)
-- `assets/30m_cube.txt` → `assets/30m_cube.obj` (also update origin comment)
+**Parse the convention tag alongside origin:**
 
-### Modified files:
-- `scene.rs` — origin parser, auto-loading, ENU→ECEF rotation for static objects
-- `main.rs` — update `load_scene()` call if signature changes (it currently takes ref_pos and enu, may no longer need those if we auto-parse origins)
+```rust
+enum ObjConvention {
+    Enu,  // X=east, Y=north, Z=up (our custom landmarks)
+    Yup,  // standard modeling Y-up
+}
 
-### NOT modified:
+fn parse_obj_metadata(path: &Path) -> (Option<LLA>, ObjConvention) {
+    let mut origin = None;
+    let mut convention = ObjConvention::Enu;
+
+    if let Ok(file) = fs::File::open(path) {
+        let reader = BufReader::new(file);
+        for line in reader.lines().take(15).flatten() {
+            let trimmed = line.trim();
+            if let Some(rest) = trimmed.strip_prefix("# origin:") {
+                let rest = rest.trim();
+                origin = parse_dms(rest).or_else(|| parse_decimal(rest));
+            }
+            if let Some(rest) = trimmed.strip_prefix("# convention:") {
+                match rest.trim() {
+                    "yup" => convention = ObjConvention::Yup,
+                    _ => convention = ObjConvention::Enu,
+                }
+            }
+        }
+    }
+
+    (origin, convention)
+}
+```
+
+**Compute rotation based on convention:**
+
+```rust
+fn object_rotation(lla: &LLA, convention: &ObjConvention) -> Quat {
+    let enu_quat = enu_to_ecef_quat(lla.lat, lla.lon);
+    match convention {
+        ObjConvention::Enu => enu_quat,
+        ObjConvention::Yup => {
+            // Y-up to Z-up: rotate -90° around X (Y becomes Z, Z becomes -Y)
+            let y_to_z = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+            enu_quat * y_to_z
+        }
+    }
+}
+```
+
+## Fix 4: Update OBJ Files with Convention Tags
+
+Add `# convention: enu` to all our custom ENU objects:
+- `1m_cube.obj`
+- `10m_cube.obj` 
+- `30m_cube.obj`
+- `pyramid_giza.obj`
+- `pyramid_transamerica.obj`
+- `pyramid_mountain.obj`
+
+Add `# convention: yup` to Y-up models:
+- `teapot.obj`
+
+## Fix 5: Simplify `load_scene()`
+
+After these changes, `load_scene()` becomes much simpler — just auto-load everything:
+
+```rust
+pub fn load_scene(device: &wgpu::Device) -> Vec<SceneObject> {
+    let mut objects = Vec::new();
+    let mut id = 10u32;
+
+    let skip = [
+        "14082_WWII_Plane_Japan_Kawasaki_Ki-61_v1_L2.obj",
+    ];
+
+    let mut entries: Vec<_> = fs::read_dir("assets")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| {
+            e.path().extension().map_or(false, |ext| ext == "obj")
+                && !skip.iter().any(|s| e.file_name().to_string_lossy() == *s)
+        })
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+
+    for entry in entries {
+        let path = entry.path();
+        let (origin, convention) = parse_obj_metadata(&path);
+        if let Some(lla) = origin {
+            let ecef_pos = coords::lla_to_ecef(&lla);
+            let rotation = object_rotation(&lla, &convention);
+            let mesh = obj_loader::load_obj(&path);
+            let name = path.file_stem().unwrap().to_string_lossy().to_string();
+            log::info!(
+                "Loaded '{}' at ({:.4}°, {:.4}°) convention={:?}",
+                name, lla.lat.to_degrees(), lla.lon.to_degrees(), convention
+            );
+            objects.push(spawn(device, &mesh, &name, ecef_pos, rotation, 1.0, id));
+            id += 1;
+        }
+    }
+
+    objects
+}
+```
+
+**Update `main.rs`** — `load_scene` no longer needs `ref_pos` or `enu` parameters:
+```rust
+let mut objects = scene::load_scene(&device);
+```
+
+Remove the `ref_pos` and `enu` variables from `resumed()` if they're only used for `load_scene`.
+
+## Fix 6: Add Debug Logging
+
+Add a log line if an OBJ has no origin (helps catch parse failures):
+```rust
+if origin.is_none() {
+    log::warn!("No valid # origin: found in {:?}, skipping", path);
+}
+```
+
+## Fix 7: Verify Teapot Scale
+
+The teapot vertices range from about -3 to +6 units. At scale 1.0, that's a 6-9m teapot. That's fine for visibility. If it's too big or too small, add a `# scale:` tag later, but for now scale=1.0 for all auto-loaded objects.
+
+## Summary of Changes
+
+### Files modified:
+- **`scene.rs`** — fix degree symbol, remove hardcoded teapots, add convention parsing, simplify load_scene signature
+- **`main.rs`** — update load_scene call (remove ref_pos/enu args)
+- **`assets/teapot.obj`** — add `# convention: yup`
+- **`assets/1m_cube.obj`** — add `# convention: enu`
+- **`assets/10m_cube.obj`** — add `# convention: enu`
+- **`assets/30m_cube.obj`** — add `# convention: enu`
+- **`assets/pyramid_giza.obj`** — add `# convention: enu`
+- **`assets/pyramid_transamerica.obj`** — add `# convention: enu`
+- **`assets/pyramid_mountain.obj`** — add `# convention: enu`
+
+### Files NOT modified:
 - `physics.rs`, `coords.rs`, `camera.rs`, `renderer.rs`, `obj_loader.rs`, `sim.rs`, `shaders/*`
 
 ## Test
-1. `cargo run --release`
-2. Sitting on SFO 28L, cubes visible to the left, teapots to the right
-3. Throttle up, roll down runway — cubes and teapots scroll past
-4. After liftoff and climbing, pyramids should be visible:
-   - Giza pyramid: ~5km south-southeast, 150m tall
-   - Transamerica: ~20km north in SF, 260m tall, thin
-   - Mountain: ~35km northwest, massive 10km base
-5. All objects should be right-side-up (Z=up in ENU correctly maps to local vertical)
+1. `cargo run --release` with `RUST_LOG=info`
+2. Check console for "Loaded 'pyramid_giza' at (37.6160°, -122.3880°)" etc. — if you see these, parsing works
+3. If you see "No valid # origin: found" for cubes/pyramids, the degree symbol is still wrong
+4. Teapot should be fixed at its origin coordinates, NOT moving with the plane
+5. All cubes and pyramids should be visible at their world positions
+6. Rolling down 28R, cubes on 28L centerline visible to the left, teapot on taxiway to the right
+7. After takeoff, pyramids visible at distance

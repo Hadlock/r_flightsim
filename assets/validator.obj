@@ -1,5 +1,5 @@
-# 10m cube — 300m down runway, 100m south
-# origin: 37°36'48.5"N 122°21'45.2"W
+# Validator cube — should appear directly ahead of aircraft
+# origin: 37°36'51.9"N 122°21'33.3"W
 # convention: enu
 v -5.0 -5.0 0.0
 v  5.0 -5.0 0.0

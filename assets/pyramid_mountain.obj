@@ -1,5 +1,6 @@
 # Mountain pyramid landmark
 # origin: 37°55'44.5"N 122°34'40.0"W
+# convention: enu
 # base: 10000m, height: 784m
 v -5000.0 -5000.0 0.0
 v  5000.0 -5000.0 0.0

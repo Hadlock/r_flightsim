@@ -1,5 +1,6 @@
 # 30m cube — 600m down runway, 150m south
 # origin: 37°36'53.2"N 122°21'56.5"W
+# convention: enu
 v -15.0 -15.0 0.0
 v  15.0 -15.0 0.0
 v  15.0  15.0 0.0

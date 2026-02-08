@@ -4,6 +4,12 @@ use glam::Mat4;
 use crate::obj_loader::Vertex;
 use crate::scene::SceneObject;
 
+/// Minimum alignment for dynamic uniform buffer offsets (256 bytes is the wgpu default).
+const UNIFORM_ALIGN: u64 = 256;
+
+/// Max objects we can render in one frame.
+const MAX_OBJECTS: u64 = 128;
+
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
 struct GeometryUniforms {
@@ -16,7 +22,7 @@ struct GeometryUniforms {
 pub struct Renderer {
     // Geometry pass
     geometry_pipeline: wgpu::RenderPipeline,
-    geometry_bind_group_layout: wgpu::BindGroupLayout,
+    geometry_bind_group: wgpu::BindGroup,
     uniform_buffer: wgpu::Buffer,
 
     // Edge detection pass
@@ -59,7 +65,7 @@ impl Renderer {
                 ),
             });
 
-        // Geometry pass bind group layout (uniform buffer)
+        // Geometry pass bind group layout (uniform buffer with dynamic offset)
         let geometry_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Geometry Bind Group Layout"),
@@ -68,8 +74,10 @@ impl Renderer {
                     visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                        has_dynamic_offset: true,
+                        min_binding_size: wgpu::BufferSize::new(
+                            std::mem::size_of::<GeometryUniforms>() as u64,
+                        ),
                     },
                     count: None,
                 }],
@@ -148,12 +156,26 @@ impl Renderer {
                 cache: None,
             });
 
-        // Uniform buffer for geometry pass
+        // Uniform buffer for geometry pass — one 256-byte-aligned slot per object
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Geometry Uniform Buffer"),
-            size: std::mem::size_of::<GeometryUniforms>() as u64,
+            size: UNIFORM_ALIGN * MAX_OBJECTS,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
+        });
+
+        // Single bind group shared by all objects (dynamic offset selects the slot)
+        let geometry_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Geometry Bind Group"),
+            layout: &geometry_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &uniform_buffer,
+                    offset: 0,
+                    size: wgpu::BufferSize::new(std::mem::size_of::<GeometryUniforms>() as u64),
+                }),
+            }],
         });
 
         // Edge detection bind group layout
@@ -248,7 +270,7 @@ impl Renderer {
 
         Self {
             geometry_pipeline,
-            geometry_bind_group_layout,
+            geometry_bind_group,
             uniform_buffer,
             edge_pipeline,
             edge_bind_group_layout,
@@ -381,6 +403,23 @@ impl Renderer {
         proj: Mat4,
         camera_pos: glam::DVec3,
     ) {
+        // Upload per-object uniforms into aligned slots BEFORE encoding any passes.
+        for (i, obj) in objects.iter().enumerate() {
+            let model = obj.model_matrix_relative_to(camera_pos);
+            let model_view = view * model;
+            let mvp = proj * model_view;
+
+            let uniforms = GeometryUniforms {
+                mvp: mvp.to_cols_array_2d(),
+                model_view: model_view.to_cols_array_2d(),
+                object_id: obj.object_id,
+                _pad: [0; 3],
+            };
+
+            let offset = i as u64 * UNIFORM_ALIGN;
+            queue.write_buffer(&self.uniform_buffer, offset, bytemuck::bytes_of(&uniforms));
+        }
+
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
@@ -427,30 +466,9 @@ impl Renderer {
 
             pass.set_pipeline(&self.geometry_pipeline);
 
-            for obj in objects {
-                let model = obj.model_matrix_relative_to(camera_pos);
-                let model_view = view * model;
-                let mvp = proj * model_view;
-
-                let uniforms = GeometryUniforms {
-                    mvp: mvp.to_cols_array_2d(),
-                    model_view: model_view.to_cols_array_2d(),
-                    object_id: obj.object_id,
-                    _pad: [0; 3],
-                };
-
-                queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&uniforms));
-
-                let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("Geometry Bind Group"),
-                    layout: &self.geometry_bind_group_layout,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: self.uniform_buffer.as_entire_binding(),
-                    }],
-                });
-
-                pass.set_bind_group(0, &bind_group, &[]);
+            for (i, obj) in objects.iter().enumerate() {
+                let dyn_offset = (i as u64 * UNIFORM_ALIGN) as u32;
+                pass.set_bind_group(0, &self.geometry_bind_group, &[dyn_offset]);
                 pass.set_vertex_buffer(0, obj.vertex_buf.slice(..));
                 pass.set_index_buffer(obj.index_buf.slice(..), wgpu::IndexFormat::Uint32);
                 pass.draw_indexed(0..obj.index_count, 0, 0..1);

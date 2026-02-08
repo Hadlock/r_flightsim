@@ -128,14 +128,12 @@ impl ApplicationHandler for App {
 
         // --- Physics setup ---
         let aircraft_body = physics::create_aircraft_at_sfo();
-        let ref_pos = aircraft_body.pos_ecef;
-        let enu = aircraft_body.enu_frame;
         let params = physics::AircraftParams::ki61();
         let simulation = physics::Simulation::new(params, aircraft_body);
         let sim_runner = sim::SimRunner::new(simulation);
 
         // --- Scene setup ---
-        let mut objects = scene::load_scene(&device, ref_pos, &enu);
+        let mut objects = scene::load_scene(&device);
         let aircraft_obj = scene::load_aircraft_object(&device, 1);
         objects.push(aircraft_obj);
         let aircraft_idx = objects.len() - 1;
@@ -280,6 +278,31 @@ impl ApplicationHandler for App {
                 aircraft.world_pos = render_state.pos_ecef;
                 aircraft.rotation =
                     sim::dquat_to_quat(render_state.orientation) * state.model_to_body;
+
+                // Debug: print scene object positions for first 3 seconds
+                {
+                    static DEBUG_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                    let count = DEBUG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if count % 60 == 0 && count < 300 {
+                        for obj in &state.objects {
+                            if obj.name == "aircraft" { continue; }
+                            let rel = obj.world_pos - state.camera.position;
+                            let rel32 = rel.as_vec3();
+                            let model = obj.model_matrix_relative_to(state.camera.position);
+                            let mv = view * model;
+                            let mvp = proj * mv;
+                            let clip = mvp * glam::Vec4::new(0.0, 0.0, 0.0, 1.0);
+                            let ndc_x = clip.x / clip.w;
+                            let ndc_y = clip.y / clip.w;
+                            println!(
+                                "[debug] '{}' rel=({:.1},{:.1},{:.1}) {:.1}m ndc=({:.3},{:.3})",
+                                obj.name,
+                                rel32.x, rel32.y, rel32.z, rel32.length(),
+                                ndc_x, ndc_y,
+                            );
+                        }
+                    }
+                }
 
                 // Render
                 let output = match state.surface.get_current_texture() {
