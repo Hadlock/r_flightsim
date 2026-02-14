@@ -93,24 +93,19 @@ impl Renderer {
                 push_constant_ranges: &[],
             });
 
-        let vertex_layout = wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                // position
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                // normal
-                wgpu::VertexAttribute {
-                    offset: 12,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-            ],
-        };
+        let vertex_attrs = [
+            wgpu::VertexAttribute {
+                offset: 0,
+                shader_location: 0,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+            wgpu::VertexAttribute {
+                offset: 12,
+                shader_location: 1,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+        ];
+        let vertex_stride = std::mem::size_of::<Vertex>() as wgpu::BufferAddress;
 
         let geometry_pipeline =
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -119,7 +114,11 @@ impl Renderer {
                 vertex: wgpu::VertexState {
                     module: &geometry_shader,
                     entry_point: Some("vs_main"),
-                    buffers: &[vertex_layout],
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: vertex_stride,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &vertex_attrs,
+                    }],
                     compilation_options: Default::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
@@ -151,6 +150,59 @@ impl Renderer {
                     format: wgpu::TextureFormat::Depth32Float,
                     depth_write_enabled: true,
                     depth_compare: wgpu::CompareFunction::Less,
+                    stencil: Default::default(),
+                    bias: Default::default(),
+                }),
+                multisample: Default::default(),
+                multiview: None,
+                cache: None,
+            });
+
+        // Solid overlay pipeline — renders objects as filled white (used for the sun).
+        // Reuses the same uniform buffer / bind group layout as the geometry pass.
+        // Depth-tests against the geometry depth buffer (LessEqual, no write).
+        let sun_shader =
+            device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("Sun Shader"),
+                source: wgpu::ShaderSource::Wgsl(
+                    include_str!("../shaders/sun.wgsl").into(),
+                ),
+            });
+
+        let solid_overlay_pipeline =
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Solid Overlay Pipeline"),
+                layout: Some(&geometry_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &sun_shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: vertex_stride,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &vertex_attrs,
+                    }],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &sun_shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: surface_format,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: Default::default(),
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: Some(wgpu::Face::Back),
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth32Float,
+                    depth_write_enabled: false,
+                    depth_compare: wgpu::CompareFunction::LessEqual,
                     stencil: Default::default(),
                     bias: Default::default(),
                 }),
@@ -277,6 +329,7 @@ impl Renderer {
             uniform_buffer,
             edge_pipeline,
             edge_bind_group_layout,
+            solid_overlay_pipeline,
             depth_texture: depth_view,
             normal_texture: normal_view,
             object_id_texture: object_id_view,
@@ -405,6 +458,7 @@ impl Renderer {
         view: Mat4,
         proj: Mat4,
         camera_pos: glam::DVec3,
+        solid_overlay_indices: &[usize],
     ) {
         // Upload per-object uniforms into aligned slots BEFORE encoding any passes.
         for (i, obj) in objects.iter().enumerate() {
@@ -503,6 +557,49 @@ impl Renderer {
             pass.set_pipeline(&self.edge_pipeline);
             pass.set_bind_group(0, &self.edge_bind_group, &[]);
             pass.draw(0..3, 0..1); // fullscreen triangle
+        }
+
+        // Pass 3: Solid overlay (sun) — renders specified objects as filled white
+        // on top of the edge-detected output, depth-tested against the geometry pass.
+        if !solid_overlay_indices.is_empty() {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Solid Overlay Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: surface_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            pass.set_pipeline(&self.solid_overlay_pipeline);
+
+            for &idx in solid_overlay_indices {
+                if idx >= objects.len() {
+                    continue;
+                }
+                let obj = &objects[idx];
+                if obj.index_count == 0 {
+                    continue;
+                }
+                let dyn_offset = (idx as u64 * UNIFORM_ALIGN) as u32;
+                pass.set_bind_group(0, &self.geometry_bind_group, &[dyn_offset]);
+                pass.set_vertex_buffer(0, obj.vertex_buf.slice(..));
+                pass.set_index_buffer(obj.index_buf.slice(..), wgpu::IndexFormat::Uint32);
+                pass.draw_indexed(0..obj.index_count, 0, 0..1);
+            }
         }
 
         queue.submit(std::iter::once(encoder.finish()));

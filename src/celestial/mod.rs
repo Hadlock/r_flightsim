@@ -69,7 +69,7 @@ impl StarToggleState {
 // ── Constants ───────────────────────────────────────────────────────
 
 const SUN_ANGULAR_DIAMETER_RAD: f64 = 0.00930; // 0.533 degrees
-const SUN_SUBDIVISIONS: u32 = 6;
+const SUN_SUBDIVISIONS: u32 = 4; // solid fill from sun.wgsl shader, only need enough for round shape
 
 const MOON_TRUE_RENDER_THRESHOLD: f64 = 1_000_000_000.0; // 1M km
 const MOON_DIAMETER: f64 = 3_474_800.0;

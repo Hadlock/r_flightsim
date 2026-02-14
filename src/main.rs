@@ -87,6 +87,7 @@ struct FlyingState {
     celestial_indices: [usize; 5], // sun, moon, planets, prominent_stars, other_stars
     // Airport proximity markers
     airport_markers: Option<airport_markers::AirportMarkers>,
+    marker_base_idx: usize,
 }
 
 // ── Game state enum ─────────────────────────────────────────────────
@@ -335,10 +336,10 @@ impl App {
         let next_marker_id = next_celestial_id + 5;
         let mut airport_markers =
             airport_markers::AirportMarkers::new(airport_json);
+        let marker_base_idx = objects.len();
         if let Some(markers) = &mut airport_markers {
-            let markers_base = objects.len();
             let marker_objects =
-                markers.create_scene_objects(&gpu.device, next_marker_id, markers_base);
+                markers.create_scene_objects(&gpu.device, next_marker_id, marker_base_idx);
             objects.extend(marker_objects);
         }
 
@@ -437,6 +438,7 @@ impl App {
             celestial: celestial_engine,
             celestial_indices,
             airport_markers,
+            marker_base_idx,
         }));
     }
 
@@ -661,10 +663,13 @@ impl App {
                     .iter()
                     .enumerate()
                     .filter_map(|(i, obj)| {
-                        // Never cull earth, player aircraft, or celestial bodies
+                        // Never cull earth, player aircraft, celestial bodies,
+                        // or airport markers (markers self-manage visibility)
                         if i == flying.earth_idx
                             || i == flying.aircraft_idx
                             || flying.celestial_indices.contains(&i)
+                            || (i >= flying.marker_base_idx
+                                && i < flying.marker_base_idx + 1024)
                         {
                             return None;
                         }
@@ -711,6 +716,8 @@ impl App {
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
+                // Sun index for solid overlay (filled white disc)
+                let sun_idx = flying.celestial_indices[0];
                 flying.renderer.render(
                     &gpu.device,
                     &gpu.queue,
@@ -719,6 +726,7 @@ impl App {
                     view,
                     proj,
                     flying.camera.position,
+                    &[sun_idx],
                 );
 
                 // Restore culled objects' index counts
@@ -1125,6 +1133,7 @@ impl ApplicationHandler for App {
                             view,
                             proj,
                             glam::DVec3::ZERO,
+                            &[],
                         );
                     } else {
                         // Render empty scene (just FSBLUE background)
@@ -1136,6 +1145,7 @@ impl ApplicationHandler for App {
                             view,
                             proj,
                             glam::DVec3::ZERO,
+                            &[],
                         );
                     }
 
