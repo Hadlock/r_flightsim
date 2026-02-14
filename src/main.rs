@@ -894,6 +894,19 @@ impl ApplicationHandler for App {
                                     .set_fullscreen(Some(Fullscreen::Borderless(None)));
                             }
                         }
+                        WindowEvent::KeyboardInput {
+                            event:
+                                KeyEvent {
+                                    physical_key: PhysicalKey::Code(KeyCode::Space),
+                                    state: ElementState::Pressed,
+                                    repeat: false,
+                                    ..
+                                },
+                            ..
+                        } => {
+                            menu_state.menu.preview_paused =
+                                !menu_state.menu.preview_paused;
+                        }
                         _ => {}
                     }
                 }
@@ -903,8 +916,34 @@ impl ApplicationHandler for App {
                     let dt = now.duration_since(menu_state.last_frame).as_secs_f32();
                     menu_state.last_frame = now;
 
-                    // Update preview rotation
-                    menu_state.menu.update_rotation(dt);
+                    // Poll arrow keys for smooth preview control
+                    {
+                        let mut yaw = 0.0_f32;
+                        let mut pitch = 0.0_f32;
+                        // Arrow key state is not tracked by egui; query the egui
+                        // input events that arrived this frame.
+                        let ctx = &menu_state.egui_ctx;
+                        ctx.input(|input| {
+                            if input.key_down(egui::Key::ArrowRight) {
+                                yaw += 1.0;
+                            }
+                            if input.key_down(egui::Key::ArrowLeft) {
+                                yaw -= 1.0;
+                            }
+                            if input.key_down(egui::Key::ArrowUp) {
+                                pitch += 1.0;
+                            }
+                            if input.key_down(egui::Key::ArrowDown) {
+                                pitch -= 1.0;
+                            }
+                        });
+                        if yaw != 0.0 || pitch != 0.0 {
+                            menu_state.menu.apply_arrow_input(yaw, pitch, dt);
+                        }
+                    }
+
+                    // Update preview rotation/pitch/zoom
+                    menu_state.menu.update_preview(dt);
 
                     // Check for pending model loads
                     menu_state
@@ -958,7 +997,7 @@ impl ApplicationHandler for App {
                     // Camera looking down at 30deg elevation from front-quarter
                     let elev = 30.0_f32.to_radians();
                     let azimuth = std::f32::consts::FRAC_PI_4; // 45 deg offset
-                    let dist = 25.0_f32;
+                    let dist = 25.0_f32 / menu_state.menu.preview_zoom;
                     let cam_x = dist * elev.cos() * azimuth.cos();
                     let cam_y = dist * elev.cos() * azimuth.sin();
                     let cam_z = dist * elev.sin();
@@ -968,9 +1007,11 @@ impl ApplicationHandler for App {
                     let view = glam::Mat4::look_at_rh(eye, center, up);
                     let proj = preview_camera.projection_matrix();
 
-                    // Update preview rotation
-                    let rotation =
-                        Quat::from_rotation_z(menu_state.menu.preview_rotation);
+                    // Update preview rotation (yaw around Z, pitch around local Y)
+                    let yaw = Quat::from_rotation_z(menu_state.menu.preview_rotation);
+                    let pitch =
+                        Quat::from_rotation_y(menu_state.menu.preview_pitch);
+                    let rotation = yaw * pitch;
                     if let Some(ref mut obj) = menu_state.menu.preview_object {
                         obj.rotation = rotation;
                     }

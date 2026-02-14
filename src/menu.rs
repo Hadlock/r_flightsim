@@ -28,6 +28,13 @@ pub struct MenuState {
     pub preview_object: Option<SceneObject>,
     pub fly_now_clicked: bool,
 
+    // Preview interaction
+    pub preview_zoom: f32,         // 1.0 = default, range [0.7, 1.3]
+    pub preview_paused: bool,
+    pub preview_pitch: f32,        // radians, clamped to ±60°
+    pub preview_yaw_vel: f32,      // rad/s from arrow keys
+    pub preview_pitch_vel: f32,    // rad/s from arrow keys
+
     // Async model loading
     pending_load: Option<mpsc::Receiver<MeshData>>,
     pending_slug: String,
@@ -43,6 +50,11 @@ impl MenuState {
             preview_rotation: 0.0,
             preview_object: None,
             fly_now_clicked: false,
+            preview_zoom: 1.0,
+            preview_paused: false,
+            preview_pitch: 0.0,
+            preview_yaw_vel: 0.0,
+            preview_pitch_vel: 0.0,
             pending_load: None,
             pending_slug: String::new(),
             loaded_slug: String::new(),
@@ -123,13 +135,49 @@ impl MenuState {
         }
     }
 
-    /// Update preview rotation. Called each frame with dt.
-    pub fn update_rotation(&mut self, dt: f32) {
-        // 5 RPM = 30 deg/sec = 0.5236 rad/sec
-        self.preview_rotation += 0.5236 * dt;
+    /// Update preview rotation and pitch. Called each frame with dt.
+    pub fn update_preview(&mut self, dt: f32) {
+        const BASE_SPIN: f32 = 0.5236; // 5 RPM = 30 deg/sec
+        const ARROW_ACCEL: f32 = 3.0;  // rad/s² acceleration from arrow keys
+        const FRICTION: f32 = 4.0;     // deceleration when no key held
+        const MAX_YAW_VEL: f32 = 3.0;  // rad/s max manual yaw speed
+        const MAX_PITCH_VEL: f32 = 2.0;
+        const MAX_PITCH: f32 = std::f32::consts::FRAC_PI_3; // 60°
+
+        // Apply friction/deceleration to velocities
+        let decay = (-FRICTION * dt).exp();
+        self.preview_yaw_vel *= decay;
+        self.preview_pitch_vel *= decay;
+
+        // Clamp velocities
+        self.preview_yaw_vel = self.preview_yaw_vel.clamp(-MAX_YAW_VEL, MAX_YAW_VEL);
+        self.preview_pitch_vel = self.preview_pitch_vel.clamp(-MAX_PITCH_VEL, MAX_PITCH_VEL);
+
+        // Auto-spin + manual yaw
+        let yaw_rate = if self.preview_paused { 0.0 } else { BASE_SPIN }
+            + self.preview_yaw_vel;
+        self.preview_rotation += yaw_rate * dt;
         if self.preview_rotation > std::f32::consts::TAU {
             self.preview_rotation -= std::f32::consts::TAU;
+        } else if self.preview_rotation < 0.0 {
+            self.preview_rotation += std::f32::consts::TAU;
         }
+
+        // Pitch
+        self.preview_pitch += self.preview_pitch_vel * dt;
+        self.preview_pitch = self.preview_pitch.clamp(-MAX_PITCH, MAX_PITCH);
+    }
+
+    /// Apply arrow key acceleration. `yaw`: +1 right, -1 left. `pitch`: +1 up, -1 down.
+    pub fn apply_arrow_input(&mut self, yaw: f32, pitch: f32, dt: f32) {
+        const ARROW_ACCEL: f32 = 3.0;
+        self.preview_yaw_vel += yaw * ARROW_ACCEL * dt;
+        self.preview_pitch_vel += pitch * ARROW_ACCEL * dt;
+    }
+
+    /// Adjust zoom by scroll delta. Positive = zoom in.
+    pub fn apply_scroll_zoom(&mut self, delta: f32) {
+        self.preview_zoom = (self.preview_zoom + delta * 0.05).clamp(0.7, 1.7);
     }
 
     /// Draw the egui menu UI. Returns true if "Fly Now" was clicked.
@@ -311,6 +359,16 @@ impl MenuState {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ctx, |ui| {
+                // Invisible hover sense over the whole preview pane for scroll zoom
+                let rect = ui.max_rect();
+                let response = ui.interact(rect, ui.id().with("preview_scroll"), egui::Sense::hover());
+                if response.hovered() {
+                    let scroll = ui.input(|i| i.smooth_scroll_delta.y);
+                    if scroll != 0.0 {
+                        self.apply_scroll_zoom(scroll / 30.0);
+                    }
+                }
+
                 // Loading indicator
                 if self.pending_load.is_some() {
                     ui.centered_and_justified(|ui| {
