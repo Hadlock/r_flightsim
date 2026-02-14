@@ -719,8 +719,18 @@ impl App {
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                // Sun index for solid overlay (filled white disc)
+                // Solid overlay: sun + airport markers (bypasses Sobel edge detection,
+                // avoiding depth buffer precision artifacts at orbital distance).
                 let sun_idx = flying.celestial_indices[0];
+                let mut overlay_indices = vec![sun_idx];
+                for i in 0..1024 {
+                    let idx = flying.marker_base_idx + i;
+                    if idx < flying.objects.len()
+                        && flying.objects[idx].index_count > 0
+                    {
+                        overlay_indices.push(idx);
+                    }
+                }
                 flying.renderer.render(
                     &gpu.device,
                     &gpu.queue,
@@ -729,7 +739,7 @@ impl App {
                     view,
                     proj,
                     flying.camera.position,
-                    &[sun_idx],
+                    &overlay_indices,
                 );
 
                 // Restore culled objects' index counts

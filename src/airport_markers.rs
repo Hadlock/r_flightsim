@@ -165,7 +165,8 @@ impl AirportMarkers {
         for (slot, &airport_idx) in self.closest_indices.iter().enumerate() {
             let scene_idx = self.scene_indices[slot];
             let ap = &self.airports[airport_idx];
-            objects[scene_idx].world_pos = ap.ecef;
+            let up = ap.ecef.normalize();
+            objects[scene_idx].world_pos = ap.ecef + up * 2_000.0;
             objects[scene_idx].rotation = enu_to_ecef_quat(ap.lat_rad, ap.lon_rad);
             objects[scene_idx].index_count =
                 self.pyramid_mesh.indices.len() as u32;

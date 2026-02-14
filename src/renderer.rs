@@ -204,7 +204,11 @@ impl Renderer {
                     depth_write_enabled: false,
                     depth_compare: wgpu::CompareFunction::LessEqual,
                     stencil: Default::default(),
-                    bias: Default::default(),
+                    bias: wgpu::DepthBiasState {
+                        constant: -1000,
+                        slope_scale: -2.0,
+                        clamp: 0.0,
+                    },
                 }),
                 multisample: Default::default(),
                 multiview: None,
@@ -524,6 +528,10 @@ impl Renderer {
             pass.set_pipeline(&self.geometry_pipeline);
 
             for (i, obj) in objects.iter().enumerate() {
+                // Skip overlay-only objects in the geometry pass (they render in pass 3)
+                if solid_overlay_indices.contains(&i) {
+                    continue;
+                }
                 let dyn_offset = (i as u64 * UNIFORM_ALIGN) as u32;
                 pass.set_bind_group(0, &self.geometry_bind_group, &[dyn_offset]);
                 pass.set_vertex_buffer(0, obj.vertex_buf.slice(..));
