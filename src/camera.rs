@@ -37,4 +37,10 @@ impl Camera {
     pub fn projection_matrix(&self) -> Mat4 {
         Mat4::perspective_rh(self.fov_deg.to_radians(), self.aspect, self.near, self.far)
     }
+
+    /// Scale near/far clip planes based on altitude for earth visibility.
+    pub fn update_clip_planes(&mut self, altitude_m: f64) {
+        self.near = crate::earth::dynamic_near_plane(altitude_m);
+        self.far = crate::earth::dynamic_far_plane(altitude_m);
+    }
 }

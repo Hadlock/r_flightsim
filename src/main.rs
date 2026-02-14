@@ -5,6 +5,7 @@ mod atc;
 mod camera;
 mod cli;
 mod coords;
+mod earth;
 mod menu;
 mod obj_loader;
 mod physics;
@@ -64,6 +65,8 @@ struct FlyingState {
     aircraft_idx: usize,
     model_to_body: Quat,
     aircraft_name: String,
+    earth_renderer: earth::EarthRenderer,
+    earth_idx: usize,
     ai_traffic: ai_traffic::AiTrafficManager,
     atc_manager: atc::AtcManager,
     atc_states: Vec<atc::types::AiPlaneAtcState>,
@@ -230,6 +233,11 @@ impl App {
             airport_gen::generate_airports(&gpu.device, airport_json, next_id, ref_ecef);
         objects.extend(airport_objects);
 
+        // Earth mesh (WGS-84 ellipsoid)
+        let (earth_renderer, earth_obj) = earth::EarthRenderer::new(&gpu.device);
+        objects.push(earth_obj);
+        let earth_idx = objects.len() - 1;
+
         // Aircraft object
         let aircraft_obj = match obj_path {
             Some(path) => {
@@ -335,6 +343,8 @@ impl App {
             aircraft_idx,
             model_to_body,
             aircraft_name,
+            earth_renderer,
+            earth_idx,
             ai_traffic,
             atc_manager,
             atc_states,
@@ -486,6 +496,10 @@ impl App {
                 flying.camera.position =
                     flying.sim_runner.camera_position(&render_state);
 
+                // Update clip planes and earth mesh for current altitude
+                let altitude_m = flying.sim_runner.sim.aircraft.lla.alt;
+                flying.camera.update_clip_planes(altitude_m);
+
                 // View matrix from aircraft orientation + pilot head look
                 let view = sim::aircraft_view_matrix(
                     render_state.orientation,
@@ -493,6 +507,13 @@ impl App {
                     flying.camera.pitch,
                 );
                 let proj = flying.camera.projection_matrix();
+
+                flying.earth_renderer.update(
+                    &gpu.device,
+                    &mut flying.objects[flying.earth_idx],
+                    flying.camera.position,
+                    altitude_m,
+                );
 
                 // Update aircraft SceneObject from physics
                 let aircraft = &mut flying.objects[flying.aircraft_idx];
