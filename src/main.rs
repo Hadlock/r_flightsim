@@ -1,6 +1,7 @@
 mod ai_traffic;
 mod aircraft_profile;
 mod airport_gen;
+mod atc;
 mod camera;
 mod cli;
 mod coords;
@@ -63,11 +64,12 @@ struct FlyingState {
     model_to_body: Quat,
     aircraft_name: String,
     ai_traffic: ai_traffic::AiTrafficManager,
-    // TODO: ATC / radio calls — add AtcManager here.
-    // Text chat log rendered top-right corner (egui overlay or custom wgpu text).
-    // AtcManager ticks each frame, generates radio messages from AI traffic + tower,
-    // exposes a message queue for the UI, and provides a TTS callback hook
-    // (e.g. Box<dyn Fn(&str)>) so callers can plug in system TTS or a speech API.
+    atc_manager: atc::AtcManager,
+    atc_states: Vec<atc::types::AiPlaneAtcState>,
+    // egui for radio overlay
+    egui_ctx: egui::Context,
+    egui_state: egui_winit::State,
+    egui_renderer: egui_wgpu::Renderer,
 }
 
 // ── Game state enum ─────────────────────────────────────────────────
@@ -254,6 +256,31 @@ impl App {
 
         let model_to_body = model_to_body_rotation();
 
+        // ATC system
+        let num_ai = ai_traffic.plane_count();
+        let atc_manager = atc::AtcManager::new(num_ai);
+        let atc_states: Vec<atc::types::AiPlaneAtcState> = (0..num_ai)
+            .map(|i| atc::build_atc_state(i))
+            .collect();
+
+        // egui for flying radio overlay
+        let egui_ctx = egui::Context::default();
+        let egui_state = egui_winit::State::new(
+            egui_ctx.clone(),
+            egui_ctx.viewport_id(),
+            &gpu.window,
+            None,
+            None,
+            None,
+        );
+        let egui_renderer = egui_wgpu::Renderer::new(
+            &gpu.device,
+            gpu.surface_format,
+            None,
+            1,
+            false,
+        );
+
         // Grab cursor
         let _ = gpu
             .window
@@ -288,6 +315,11 @@ impl App {
             model_to_body,
             aircraft_name,
             ai_traffic,
+            atc_manager,
+            atc_states,
+            egui_ctx,
+            egui_state,
+            egui_renderer,
         }));
     }
 
@@ -458,10 +490,14 @@ impl App {
                         sim::dquat_to_quat(orient) * flying.model_to_body;
                 }
 
-                // TODO: ATC tick — advance AtcManager here (after physics, before render).
-                // It should consume AI traffic positions + player state to generate
-                // radio messages, then the overlay draws them top-right during render.
-                // TTS hook fires here for new messages: atc.tick(dt, &render_state, &ai_traffic);
+                // ATC tick
+                flying.atc_manager.advance_enroute_timers(dt);
+                flying.atc_manager.tick(
+                    dt,
+                    flying.ai_traffic.planes(),
+                    &mut flying.atc_states,
+                    render_state.pos_ecef,
+                );
 
                 // Render
                 let output = match gpu.surface.get_current_texture() {
@@ -488,6 +524,81 @@ impl App {
                     proj,
                     flying.camera.position,
                 );
+
+                // egui radio overlay
+                let raw_input = flying.egui_state.take_egui_input(&gpu.window);
+                let recent = flying.atc_manager.recent_messages(15.0);
+                let com1 = flying.atc_manager.com1_freq;
+
+                let full_output = flying.egui_ctx.run(raw_input, |ctx| {
+                    draw_radio_overlay(ctx, &recent, com1);
+                });
+
+                flying.egui_state.handle_platform_output(
+                    &gpu.window,
+                    full_output.platform_output,
+                );
+
+                let clipped = flying.egui_ctx.tessellate(
+                    full_output.shapes,
+                    full_output.pixels_per_point,
+                );
+
+                let screen_desc = egui_wgpu::ScreenDescriptor {
+                    size_in_pixels: [gpu.config.width, gpu.config.height],
+                    pixels_per_point: full_output.pixels_per_point,
+                };
+
+                for (id, delta) in &full_output.textures_delta.set {
+                    flying.egui_renderer.update_texture(
+                        &gpu.device, &gpu.queue, *id, delta,
+                    );
+                }
+
+                let mut encoder = gpu.device.create_command_encoder(
+                    &wgpu::CommandEncoderDescriptor {
+                        label: Some("egui flying encoder"),
+                    },
+                );
+
+                flying.egui_renderer.update_buffers(
+                    &gpu.device,
+                    &gpu.queue,
+                    &mut encoder,
+                    &clipped,
+                    &screen_desc,
+                );
+
+                {
+                    let mut pass = encoder.begin_render_pass(
+                        &wgpu::RenderPassDescriptor {
+                            label: Some("egui flying pass"),
+                            color_attachments: &[Some(
+                                wgpu::RenderPassColorAttachment {
+                                    view: &surface_view,
+                                    resolve_target: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Load,
+                                        store: wgpu::StoreOp::Store,
+                                    },
+                                },
+                            )],
+                            depth_stencil_attachment: None,
+                            timestamp_writes: None,
+                            occlusion_query_set: None,
+                        },
+                    ).forget_lifetime();
+
+                    flying.egui_renderer.render(
+                        &mut pass, &clipped, &screen_desc,
+                    );
+                }
+
+                gpu.queue.submit(std::iter::once(encoder.finish()));
+
+                for id in &full_output.textures_delta.free {
+                    flying.egui_renderer.free_texture(id);
+                }
 
                 output.present();
                 gpu.window.request_redraw();
@@ -920,6 +1031,85 @@ impl ApplicationHandler for App {
     }
 }
 
+/// Draw the radio overlay in the top-right corner during flying state.
+fn draw_radio_overlay(
+    ctx: &egui::Context,
+    messages: &[&atc::types::RadioMessage],
+    com1_freq: f32,
+) {
+    // Non-interactive overlay style
+    let mut style = (*ctx.style()).clone();
+    style.visuals.window_fill = egui::Color32::TRANSPARENT;
+    style.visuals.panel_fill = egui::Color32::TRANSPARENT;
+    style.visuals.override_text_color = Some(egui::Color32::WHITE);
+    ctx.set_style(style);
+
+    egui::Area::new(egui::Id::new("radio_overlay"))
+        .anchor(egui::Align2::RIGHT_TOP, egui::Vec2::new(-10.0, 10.0))
+        .interactable(false)
+        .show(ctx, |ui| {
+            egui::Frame::NONE
+                .fill(egui::Color32::from_rgba_unmultiplied(25, 51, 76, 200))
+                .corner_radius(egui::CornerRadius::same(4))
+                .inner_margin(egui::Margin::same(8))
+                .show(ui, |ui| {
+                    ui.set_width(380.0);
+
+                    // Frequency header
+                    ui.label(
+                        egui::RichText::new(format!("COM1: {:.1}", com1_freq))
+                            .color(egui::Color32::from_rgb(120, 180, 220))
+                            .small()
+                            .strong(),
+                    );
+
+                    ui.add_space(4.0);
+
+                    // Show last 4 messages
+                    let display_msgs: Vec<_> = messages.iter().rev().take(4).rev().collect();
+
+                    if display_msgs.is_empty() {
+                        ui.label(
+                            egui::RichText::new("  monitoring...")
+                                .color(egui::Color32::from_rgb(100, 120, 140))
+                                .small(),
+                        );
+                    } else {
+                        for msg in display_msgs {
+                            let is_controller = matches!(
+                                msg.speaker,
+                                atc::types::Speaker::Controller(_)
+                            );
+                            let speaker_color = if is_controller {
+                                egui::Color32::from_rgb(140, 220, 255) // light cyan
+                            } else {
+                                egui::Color32::from_rgb(180, 190, 200) // light gray
+                            };
+                            let text_color = if is_controller {
+                                egui::Color32::from_rgb(220, 235, 245)
+                            } else {
+                                egui::Color32::from_rgb(170, 180, 190)
+                            };
+
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(
+                                    egui::RichText::new(format!("{}:", msg.display_speaker))
+                                        .color(speaker_color)
+                                        .small()
+                                        .strong(),
+                                );
+                                ui.label(
+                                    egui::RichText::new(&msg.text)
+                                        .color(text_color)
+                                        .small(),
+                                );
+                            });
+                        }
+                    }
+                });
+        });
+}
+
 impl App {
     fn publish_flying_telemetry(&self, flying: &FlyingState) {
         let sim = &flying.sim_runner.sim;
@@ -958,6 +1148,21 @@ impl App {
             0.0
         };
 
+        // Build radio log from ATC message log
+        let radio_log: Vec<telemetry::RadioLogEntry> = flying
+            .atc_manager
+            .message_log()
+            .iter()
+            .rev()
+            .take(20)
+            .rev()
+            .map(|m| telemetry::RadioLogEntry {
+                frequency: m.frequency,
+                speaker: m.display_speaker.clone(),
+                text: m.text.clone(),
+            })
+            .collect();
+
         let mut t = self.shared_telemetry.lock().unwrap();
         t.airspeed_kts = airspeed_kts;
         t.groundspeed_kts = gs_kts;
@@ -973,6 +1178,7 @@ impl App {
         t.brakes = c.brakes > 0.0;
         t.latitude = lat;
         t.longitude = lon;
+        t.radio_log = radio_log;
     }
 }
 

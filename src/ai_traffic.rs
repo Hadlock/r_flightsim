@@ -30,8 +30,8 @@ const LOITER_MAX_SEC: f64 = 90.0;
 
 // --- Types ---
 
-#[derive(Clone, Copy)]
-enum NavState {
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum NavState {
     Loiter,
     Transit,
 }
@@ -260,6 +260,38 @@ impl AiPlane {
             lla.alt = SAN_BRUNO_SAFE_ALT;
             self.pos_ecef = coords::lla_to_ecef(&lla);
         }
+    }
+
+    // --- Public accessors for ATC system ---
+
+    /// Altitude in feet MSL.
+    pub fn altitude_ft(&self) -> f64 {
+        self.altitude_m * 3.28084
+    }
+
+    /// Speed in knots.
+    pub fn speed_kts(&self) -> f64 {
+        self.speed_mps * 1.94384
+    }
+
+    /// Heading in degrees (0=north, CW positive).
+    pub fn heading_deg(&self) -> f64 {
+        self.heading.to_degrees().rem_euclid(360.0)
+    }
+
+    /// Current navigation state.
+    pub fn nav_state(&self) -> NavState {
+        self.nav_state
+    }
+
+    /// Current waypoint index (0-2).
+    pub fn current_waypoint(&self) -> usize {
+        self.current_wp
+    }
+
+    /// Target waypoint index (0-2).
+    pub fn target_waypoint(&self) -> usize {
+        self.target_wp
     }
 }
 

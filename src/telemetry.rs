@@ -18,6 +18,13 @@ use ratatui::{
 };
 
 #[derive(Clone)]
+pub struct RadioLogEntry {
+    pub frequency: f32,
+    pub speaker: String,
+    pub text: String,
+}
+
+#[derive(Clone)]
 pub struct Telemetry {
     pub airspeed_kts: f64,
     pub groundspeed_kts: f64,
@@ -36,6 +43,7 @@ pub struct Telemetry {
     pub fps: f64,
     pub aircraft_name: String,
     pub app_state: AppStateLabel,
+    pub radio_log: Vec<RadioLogEntry>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -64,6 +72,7 @@ impl Default for Telemetry {
             fps: 0.0,
             aircraft_name: String::new(),
             app_state: AppStateLabel::Menu,
+            radio_log: Vec::new(),
         }
     }
 }
@@ -170,7 +179,7 @@ fn draw_flight_dashboard(frame: &mut ratatui::Frame, area: Rect, t: &Telemetry) 
             Constraint::Length(3), // Altitude
             Constraint::Length(3), // Engine
             Constraint::Length(3), // Position
-            Constraint::Min(0),   // Spacer
+            Constraint::Min(5),   // Radio log
         ])
         .split(inner);
 
@@ -243,4 +252,16 @@ fn draw_flight_dashboard(frame: &mut ratatui::Frame, area: Rect, t: &Telemetry) 
     ]))
     .block(Block::default().title(" Position ").borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)));
     frame.render_widget(position, chunks[4]);
+
+    // Radio log
+    let radio_lines: Vec<Line> = t.radio_log.iter().rev().take(20).rev().map(|entry| {
+        Line::from(vec![
+            Span::styled(format!("{:5.1} ", entry.frequency), Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("{:<8} ", entry.speaker), Style::default().fg(Color::Cyan)),
+            Span::styled(&entry.text, Style::default().fg(Color::White)),
+        ])
+    }).collect();
+    let radio = Paragraph::new(radio_lines)
+        .block(Block::default().title(" Radio ").borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)));
+    frame.render_widget(radio, chunks[5]);
 }
