@@ -18,4 +18,8 @@ pub struct Args {
     /// Disable TTS audio for ATC radio
     #[arg(long = "no-tts")]
     pub no_tts: bool,
+
+    /// Simulation start time (ISO 8601 UTC, e.g. "2025-06-15T14:30:00Z"). Defaults to system clock.
+    #[arg(long = "epoch")]
+    pub epoch: Option<String>,
 }

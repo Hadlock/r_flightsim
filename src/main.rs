@@ -3,6 +3,7 @@ mod aircraft_profile;
 mod airport_gen;
 mod atc;
 mod camera;
+mod celestial;
 mod cli;
 mod coords;
 mod earth;
@@ -80,6 +81,9 @@ struct FlyingState {
     egui_renderer: egui_wgpu::Renderer,
     // TTS engine (None if --no-tts or init failed)
     tts_engine: Option<tts::TtsEngine>,
+    // Celestial engine (sun, moon, planets, stars)
+    celestial: celestial::CelestialEngine,
+    celestial_indices: [usize; 5], // sun, moon, planets, prominent_stars, other_stars
 }
 
 // ── Game state enum ─────────────────────────────────────────────────
@@ -273,6 +277,30 @@ impl App {
 
         let model_to_body = model_to_body_rotation();
 
+        // Celestial engine (sun, moon, planets, stars)
+        let epoch_unix = self.args.epoch.as_ref().and_then(|s| {
+            match celestial::time::iso8601_to_unix(s) {
+                Ok(unix) => Some(unix),
+                Err(e) => {
+                    log::warn!("Invalid --epoch '{}': {}, using system clock", s, e);
+                    None
+                }
+            }
+        });
+        let celestial_engine = celestial::CelestialEngine::new(epoch_unix);
+        let next_celestial_id = ai_base_id + ai_traffic.plane_count() as u32;
+        let (celestial_objects, celestial_rel_indices) =
+            celestial_engine.create_scene_objects(&gpu.device, next_celestial_id);
+        let celestial_base = objects.len();
+        let celestial_indices = [
+            celestial_base + celestial_rel_indices[0],
+            celestial_base + celestial_rel_indices[1],
+            celestial_base + celestial_rel_indices[2],
+            celestial_base + celestial_rel_indices[3],
+            celestial_base + celestial_rel_indices[4],
+        ];
+        objects.extend(celestial_objects);
+
         // ATC system
         let num_ai = ai_traffic.plane_count();
         let mut atc_manager = atc::AtcManager::new(num_ai);
@@ -365,6 +393,8 @@ impl App {
             egui_state,
             egui_renderer,
             tts_engine,
+            celestial: celestial_engine,
+            celestial_indices,
         }));
     }
 
@@ -466,6 +496,11 @@ impl App {
                         flying.camera.pitch = 0.0;
                         FlyingAction::None
                     }
+                    KeyCode::KeyP => {
+                        flying.celestial.star_toggle =
+                            flying.celestial.star_toggle.cycle();
+                        FlyingAction::None
+                    }
                     _ => {
                         flying.sim_runner.key_down(*key);
                         FlyingAction::None
@@ -537,6 +572,18 @@ impl App {
                 aircraft.rotation =
                     sim::dquat_to_quat(render_state.orientation) * flying.model_to_body;
 
+                // Update celestial bodies (sun, moon, planets, stars)
+                flying.celestial.update(dt, flying.camera.position);
+                flying.celestial.update_scene_objects(
+                    &gpu.device,
+                    &gpu.queue,
+                    &mut flying.objects,
+                    &flying.celestial_indices,
+                    flying.camera.position,
+                    altitude_m,
+                    flying.camera.far,
+                );
+
                 // Update AI traffic
                 flying.ai_traffic.update(dt);
                 let ai_count = flying.ai_traffic.plane_count();
@@ -567,8 +614,11 @@ impl App {
                     .iter()
                     .enumerate()
                     .filter_map(|(i, obj)| {
-                        // Never cull earth or player aircraft
-                        if i == flying.earth_idx || i == flying.aircraft_idx {
+                        // Never cull earth, player aircraft, or celestial bodies
+                        if i == flying.earth_idx
+                            || i == flying.aircraft_idx
+                            || flying.celestial_indices.contains(&i)
+                        {
                             return None;
                         }
                         let rel = obj.world_pos - flying.camera.position;
