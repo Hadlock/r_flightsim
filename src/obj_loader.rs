@@ -15,16 +15,23 @@ pub struct MeshData {
 }
 
 pub fn load_obj(path: &Path) -> MeshData {
-    let file = std::fs::File::open(path).expect("Failed to open OBJ file");
-    let mut reader = std::io::BufReader::new(file);
+    // Read as bytes and convert to lossy UTF-8 to handle ISO-8859 encoded files
+    let bytes = std::fs::read(path).expect("Failed to read OBJ file");
+    let text = String::from_utf8_lossy(&bytes);
+    // Strip mtllib/usemtl lines so tobj doesn't try to resolve materials
+    let cleaned: String = text
+        .lines()
+        .filter(|l| !l.starts_with("mtllib ") && !l.starts_with("usemtl "))
+        .flat_map(|l| [l, "\n"])
+        .collect();
+    let mut cursor = std::io::Cursor::new(cleaned.as_bytes());
     let (models, _) = tobj::load_obj_buf(
-        &mut reader,
+        &mut cursor,
         &tobj::LoadOptions {
             triangulate: true,
             single_index: true,
             ..Default::default()
         },
-        // Ignore materials — we don't use them
         |_| Ok((Vec::new(), Default::default())),
     )
     .expect("Failed to parse OBJ file");
