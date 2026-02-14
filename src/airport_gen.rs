@@ -483,6 +483,7 @@ pub fn generate_airports(
             let enu_offset = DVec3::new(ri.offset_east, ri.offset_north, 0.0);
             let rwy_ecef = apt_ecef + enu_frame.enu_to_ecef(enu_offset);
 
+            let radius = crate::scene::mesh_bounding_radius(&mesh);
             let bufs = upload_mesh(device, &mesh, &format!("{}_{}", airport.ident,
                 rwy.le_ident.as_deref().unwrap_or("rwy")));
             objects.push(SceneObject {
@@ -496,6 +497,7 @@ pub fn generate_airports(
                 scale: 1.0,
                 object_id: obj_id,
                 edges_enabled: true,
+                bounding_radius: radius,
             });
             obj_id += 1;
 
@@ -589,6 +591,7 @@ pub fn generate_airports(
 
         // Upload buildings mesh
         if !building_mesh.vertices.is_empty() {
+            let radius = crate::scene::mesh_bounding_radius(&building_mesh);
             let bufs = upload_mesh(
                 device,
                 &building_mesh,
@@ -604,6 +607,7 @@ pub fn generate_airports(
                 scale: 1.0,
                 object_id: obj_id,
                 edges_enabled: true,
+                bounding_radius: radius,
             });
             obj_id += 1;
         }

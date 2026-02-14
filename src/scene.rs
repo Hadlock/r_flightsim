@@ -17,6 +17,20 @@ pub struct SceneObject {
     pub scale: f32,
     pub object_id: u32,
     pub edges_enabled: bool,
+    /// World-space bounding sphere radius (accounts for scale). Used for culling.
+    pub bounding_radius: f32,
+}
+
+/// Compute the bounding radius of a mesh (max vertex distance from origin).
+pub fn mesh_bounding_radius(mesh: &MeshData) -> f32 {
+    mesh.vertices
+        .iter()
+        .map(|v| {
+            let [x, y, z] = v.position;
+            x * x + y * y + z * z
+        })
+        .fold(0.0_f32, f32::max)
+        .sqrt()
 }
 
 impl SceneObject {
@@ -63,6 +77,7 @@ pub fn spawn(
     object_id: u32,
 ) -> SceneObject {
     let bufs = upload_mesh(device, mesh, name);
+    let radius = mesh_bounding_radius(mesh) * scale;
     SceneObject {
         name: name.to_string(),
         vertex_buf: bufs.vertex_buf,
@@ -73,6 +88,7 @@ pub fn spawn(
         scale,
         object_id,
         edges_enabled: true,
+        bounding_radius: radius,
     }
 }
 

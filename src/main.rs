@@ -159,6 +159,8 @@ impl App {
             false,
         );
 
+        menu::configure_style(&egui_ctx);
+
         let mut menu = menu::MenuState::new(profiles);
         menu.request_preview_load();
 
@@ -298,6 +300,13 @@ impl App {
 
         // egui for flying radio overlay
         let egui_ctx = egui::Context::default();
+        {
+            let mut style = (*egui_ctx.style()).clone();
+            style.visuals.window_fill = egui::Color32::TRANSPARENT;
+            style.visuals.panel_fill = egui::Color32::TRANSPARENT;
+            style.visuals.override_text_color = Some(egui::Color32::WHITE);
+            egui_ctx.set_style(style);
+        }
         let egui_state = egui_winit::State::new(
             egui_ctx.clone(),
             egui_ctx.viewport_id(),
@@ -394,6 +403,8 @@ impl App {
             1,
             false,
         );
+
+        menu::configure_style(&egui_ctx);
 
         let mut menu = menu::MenuState::new(profiles);
         if let Some(idx) = previous_selection {
@@ -514,6 +525,7 @@ impl App {
 
                 flying.earth_renderer.update(
                     &gpu.device,
+                    &gpu.queue,
                     &mut flying.objects[flying.earth_idx],
                     flying.camera.position,
                     altitude_m,
@@ -546,14 +558,54 @@ impl App {
                     render_state.pos_ecef,
                 );
 
+                // Cull invisible objects: save index_count, zero it, render, restore.
+                // Uses bounding sphere so large objects (runways, building clusters)
+                // don't pop out when their center passes behind the camera.
+                const DISTANCE_CULL_M: f64 = 400_000.0; // ~250 miles
+                let culled: Vec<(usize, u32)> = flying
+                    .objects
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, obj)| {
+                        // Never cull earth or player aircraft
+                        if i == flying.earth_idx || i == flying.aircraft_idx {
+                            return None;
+                        }
+                        let rel = obj.world_pos - flying.camera.position;
+                        let dist = rel.length();
+                        let radius = obj.bounding_radius as f64;
+                        // Distance cull: nearest point of bounding sphere beyond limit
+                        if dist - radius > DISTANCE_CULL_M {
+                            return Some((i, obj.index_count));
+                        }
+                        // Behind-camera cull: entire bounding sphere behind near plane
+                        let rel_f32 = rel.as_vec3();
+                        let view_z = view.transform_point3(rel_f32).z;
+                        if view_z > obj.bounding_radius {
+                            return Some((i, obj.index_count));
+                        }
+                        None
+                    })
+                    .collect();
+                for &(i, _) in &culled {
+                    flying.objects[i].index_count = 0;
+                }
+
                 // Render
                 let output = match gpu.surface.get_current_texture() {
                     Ok(t) => t,
                     Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                        // Restore culled counts before returning
+                        for (i, count) in culled {
+                            flying.objects[i].index_count = count;
+                        }
                         return FlyingAction::ReconfigureSurface;
                     }
                     Err(e) => {
                         log::error!("Surface error: {}", e);
+                        for (i, count) in culled {
+                            flying.objects[i].index_count = count;
+                        }
                         return FlyingAction::None;
                     }
                 };
@@ -571,6 +623,11 @@ impl App {
                     proj,
                     flying.camera.position,
                 );
+
+                // Restore culled objects' index counts
+                for (i, count) in culled {
+                    flying.objects[i].index_count = count;
+                }
 
                 // egui radio overlay
                 let raw_input = flying.egui_state.take_egui_input(&gpu.window);
@@ -1095,13 +1152,6 @@ fn draw_radio_overlay(
     messages: &[&atc::types::RadioMessage],
     com1_freq: f32,
 ) {
-    // Non-interactive overlay style
-    let mut style = (*ctx.style()).clone();
-    style.visuals.window_fill = egui::Color32::TRANSPARENT;
-    style.visuals.panel_fill = egui::Color32::TRANSPARENT;
-    style.visuals.override_text_color = Some(egui::Color32::WHITE);
-    ctx.set_style(style);
-
     egui::Area::new(egui::Id::new("radio_overlay"))
         .anchor(egui::Align2::RIGHT_TOP, egui::Vec2::new(-10.0, 10.0))
         .interactable(false)

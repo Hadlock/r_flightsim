@@ -135,7 +135,6 @@ impl MenuState {
     /// Draw the egui menu UI. Returns true if "Fly Now" was clicked.
     pub fn draw_ui(&mut self, ctx: &egui::Context) -> bool {
         self.fly_now_clicked = false;
-        configure_style(ctx);
 
         // Top tab bar
         egui::TopBottomPanel::top("tab_bar").show(ctx, |ui| {
@@ -353,7 +352,7 @@ impl MenuState {
     }
 }
 
-fn configure_style(ctx: &egui::Context) {
+pub fn configure_style(ctx: &egui::Context) {
     let mut style = (*ctx.style()).clone();
     let visuals = &mut style.visuals;
 

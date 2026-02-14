@@ -30,6 +30,8 @@ pub struct EarthRenderer {
     current_lod: usize,
     last_camera_ecef: DVec3,
     last_rebuild_lod: usize,
+    /// Reusable scratch buffer for building camera-relative vertices (avoids per-frame heap alloc)
+    vertex_scratch: Vec<Vertex>,
 }
 
 impl EarthRenderer {
@@ -54,6 +56,9 @@ impl EarthRenderer {
                 .join(", ")
         );
 
+        // LOD 0 has the most vertices — use it for max buffer sizing
+        let max_vertices = lods.iter().map(|l| l.vertices_ecef.len()).max().unwrap_or(0);
+
         let lod = &lods[0];
         let vertices = build_gpu_vertices(lod, DVec3::ZERO);
         let scene_obj = create_scene_object(device, &vertices, &lod.indices, DVec3::ZERO);
@@ -63,6 +68,7 @@ impl EarthRenderer {
             current_lod: 0,
             last_camera_ecef: DVec3::new(f64::MAX, 0.0, 0.0),
             last_rebuild_lod: usize::MAX,
+            vertex_scratch: Vec::with_capacity(max_vertices),
         };
 
         (renderer, scene_obj)
@@ -71,6 +77,7 @@ impl EarthRenderer {
     pub fn update(
         &mut self,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         scene_obj: &mut SceneObject,
         camera_pos_ecef: DVec3,
         altitude_m: f64,
@@ -88,14 +95,28 @@ impl EarthRenderer {
         }
 
         let lod = &self.lods[new_lod];
-        let vertices = build_gpu_vertices(lod, camera_pos_ecef);
 
-        scene_obj.vertex_buf =
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Earth Vertex Buffer"),
-                contents: bytemuck::cast_slice(&vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
+        // Fill scratch buffer with camera-relative vertices (reuses heap allocation)
+        self.vertex_scratch.clear();
+        self.vertex_scratch.extend(
+            lod.vertices_ecef
+                .iter()
+                .zip(lod.normals.iter())
+                .map(|(pos, normal)| {
+                    let rel = *pos - camera_pos_ecef;
+                    Vertex {
+                        position: [rel.x as f32, rel.y as f32, rel.z as f32],
+                        normal: *normal,
+                    }
+                }),
+        );
+
+        // Update vertex buffer in-place (avoids GPU memory alloc/free per rebuild)
+        queue.write_buffer(
+            &scene_obj.vertex_buf,
+            0,
+            bytemuck::cast_slice(&self.vertex_scratch),
+        );
 
         if new_lod != self.current_lod {
             scene_obj.index_buf =
@@ -198,7 +219,7 @@ fn create_scene_object(
     let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Earth Vertex Buffer"),
         contents: bytemuck::cast_slice(vertices),
-        usage: wgpu::BufferUsages::VERTEX,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
     });
     let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Earth Index Buffer"),
@@ -216,6 +237,7 @@ fn create_scene_object(
         scale: 1.0,
         object_id: 2,
         edges_enabled: true,
+        bounding_radius: f32::MAX, // never cull earth
     }
 }
 
