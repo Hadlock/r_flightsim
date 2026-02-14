@@ -15,15 +15,19 @@ pub struct MeshData {
 }
 
 pub fn load_obj(path: &Path) -> MeshData {
-    let (models, _) = tobj::load_obj(
-        path,
+    let file = std::fs::File::open(path).expect("Failed to open OBJ file");
+    let mut reader = std::io::BufReader::new(file);
+    let (models, _) = tobj::load_obj_buf(
+        &mut reader,
         &tobj::LoadOptions {
             triangulate: true,
             single_index: true,
             ..Default::default()
         },
+        // Ignore materials — we don't use them
+        |_| Ok((Vec::new(), Default::default())),
     )
-    .expect("Failed to load OBJ file");
+    .expect("Failed to parse OBJ file");
 
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
