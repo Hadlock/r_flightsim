@@ -29,6 +29,9 @@ pub struct Renderer {
     edge_pipeline: wgpu::RenderPipeline,
     edge_bind_group_layout: wgpu::BindGroupLayout,
 
+    // Solid overlay pass (sun — renders as filled white using its own shader)
+    solid_overlay_pipeline: wgpu::RenderPipeline,
+
     // Offscreen textures
     depth_texture: wgpu::TextureView,
     normal_texture: wgpu::TextureView,
