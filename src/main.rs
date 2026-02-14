@@ -22,7 +22,11 @@ use renderer::Renderer;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+/// Target frame time (~60 fps). The GPU vsync handles actual presentation timing;
+/// this just prevents the CPU from busy-spinning between frames.
+const TARGET_FRAME_TIME: Duration = Duration::from_micros(15_000);
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -644,6 +648,12 @@ impl App {
                 }
 
                 output.present();
+
+                // Frame pacing: yield CPU until next target frame
+                if let Some(remaining) = TARGET_FRAME_TIME.checked_sub(now.elapsed()) {
+                    std::thread::sleep(remaining);
+                }
+
                 gpu.window.request_redraw();
 
                 FlyingAction::UpdateTelemetry
@@ -999,6 +1009,11 @@ impl ApplicationHandler for App {
                         menu_state.egui_renderer.free_texture(id);
                     }
 
+                    // Frame pacing: yield CPU until next target frame
+                    if let Some(remaining) = TARGET_FRAME_TIME.checked_sub(now.elapsed()) {
+                        std::thread::sleep(remaining);
+                    }
+
                     gpu.window.request_redraw();
 
                     // Check if Fly Now was clicked
@@ -1068,9 +1083,9 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        if let Some(gpu) = &self.gpu {
-            gpu.window.request_redraw();
-        }
+        // Rendering is driven by request_redraw() in RedrawRequested handlers.
+        // Don't request_redraw() here — it creates a busy loop that pins the CPU
+        // at 100% because macOS Metal present() doesn't block the CPU thread.
     }
 }
 

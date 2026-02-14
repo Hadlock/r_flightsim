@@ -44,7 +44,6 @@ pub struct SimRunner {
     prev_state: InterpolationState,
     curr_state: InterpolationState,
     held_keys: HashSet<KeyCode>,
-    telemetry_timer: f64,
 }
 
 impl SimRunner {
@@ -56,7 +55,6 @@ impl SimRunner {
             prev_state: state.clone(),
             curr_state: state,
             held_keys: HashSet::new(),
-            telemetry_timer: 0.0,
         }
     }
 
@@ -85,11 +83,7 @@ impl SimRunner {
             self.accumulator -= PHYSICS_DT;
         }
 
-        self.telemetry_timer += dt;
-        if self.telemetry_timer >= 0.5 {
-            self.telemetry_timer = 0.0;
-            self.print_telemetry();
-        }
+        // Telemetry display handled by ratatui dashboard thread
     }
 
     /// Get interpolated state for smooth rendering between physics steps.
@@ -101,45 +95,6 @@ impl SimRunner {
     /// Camera ECEF position (pilot eye in world space).
     pub fn camera_position(&self, render_state: &InterpolationState) -> DVec3 {
         render_state.pos_ecef + render_state.orientation * PILOT_EYE_BODY
-    }
-
-    fn print_telemetry(&self) {
-        let a = &self.sim.aircraft;
-        let lat = a.lla.lat.to_degrees();
-        let lon = a.lla.lon.to_degrees();
-        let alt_ft = a.lla.alt * 3.28084;
-        let gs_kts = a.groundspeed * 1.94384;
-        let vs_fpm = a.vertical_speed * 196.85;
-        let throttle_pct = self.sim.controls.throttle * 100.0;
-
-        // Heading from body forward in ENU
-        let nose_ecef = a.orientation * DVec3::X;
-        let nose_enu = a.enu_frame.ecef_to_enu(nose_ecef);
-        let hdg = nose_enu.x.atan2(nose_enu.y).to_degrees();
-        let hdg = if hdg < 0.0 { hdg + 360.0 } else { hdg };
-
-        // Pitch angle: body forward projected onto ENU up
-        let pitch_deg = nose_enu.z.asin().to_degrees();
-
-        // Bank angle: body right wing in ENU
-        let right_ecef = a.orientation * DVec3::Y;
-        let right_enu = a.enu_frame.ecef_to_enu(right_ecef);
-        let bank_deg = right_enu.z.asin().to_degrees();
-
-        let wow = if a.on_ground { "GND" } else { "AIR" };
-        let brk = if self.sim.controls.brakes > 0.0 { "BRK" } else { "   " };
-
-        println!(
-            "HDG:{:5.1}\u{00b0} PIT:{:+5.1}\u{00b0} BNK:{:+5.1}\u{00b0} | \
-             GS:{:5.1}kt VS:{:+6.0}fpm ALT:{:6.0}ft | \
-             THR:{:3.0}% {} {} | \
-             {:.4}\u{00b0}{} {:.4}\u{00b0}{}",
-            hdg, pitch_deg, bank_deg,
-            gs_kts, vs_fpm, alt_ft,
-            throttle_pct, wow, brk,
-            lat.abs(), if lat >= 0.0 { "N" } else { "S" },
-            lon.abs(), if lon >= 0.0 { "E" } else { "W" },
-        );
     }
 
     fn update_controls(&mut self, dt: f64) {
