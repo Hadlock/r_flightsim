@@ -118,7 +118,7 @@ impl AirportMarkers {
                 "airport_marker",
                 DVec3::ZERO,
                 Quat::IDENTITY,
-                400.0, // 400x scale: ~92km base, 58km tall — visible from orbit
+                261.0, // 261x scale: ~60km base, 38km tall — visible from orbit
                 base_object_id + i as u32,
             );
             self.scene_indices.push(objects_base_idx + i);

@@ -332,10 +332,13 @@ impl App {
         ];
         objects.extend(celestial_objects);
 
-        // Airport proximity markers (closest 1024 airports as pyramids)
+        // Airport proximity markers — only in orbital mode (too large for airplane flight)
         let next_marker_id = next_celestial_id + 5;
-        let mut airport_markers =
-            airport_markers::AirportMarkers::new(airport_json);
+        let mut airport_markers = if orbit_spec.is_some() {
+            airport_markers::AirportMarkers::new(airport_json)
+        } else {
+            None
+        };
         let marker_base_idx = objects.len();
         if let Some(markers) = &mut airport_markers {
             let marker_objects =
