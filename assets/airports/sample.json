@@ -1,3 +1,32 @@
+[
+  {
+    "ident": "00A",
+    "type": "heliport",
+    "name": "Total RF Heliport",
+    "latitude": 40.070985,
+    "longitude": -74.933689,
+    "elevation_ft": 11,
+    "continent": "NA",
+    "continent_name": "North America",
+    "iso_country": "US",
+    "iso_region": "US-PA",
+    "municipality": "Bensalem",
+    "iata_code": "",
+    "local_code": "00A",
+    "runways": [
+      {
+        "length_ft": 80,
+        "width_ft": 80,
+        "surface": "ASPH-G",
+        "lighted": true,
+        "closed": false,
+        "le_ident": "H1",
+        "he_ident": "",
+        "le_heading_degT": null,
+        "he_heading_degT": null
+      }
+    ]
+  },
   {
     "ident": "KDFW",
     "type": "large_airport",

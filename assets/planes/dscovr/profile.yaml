@@ -1,0 +1,38 @@
+name: "DSCOVR"
+manufacturer: "NASA/NOAA"
+country: "United States"
+year: 2015
+description: "Deep Space Climate Observatory at Sun-Earth L1 point, ~1.5 million km from Earth. Views the sunlit Earth."
+category: "Spacecraft"
+
+model:
+  obj: "../../obj_static/pyramid_giza.obj"
+
+physics:
+  mass: 570.0
+  inertia: [1000.0, 1000.0, 1000.0]
+  wing_area: 0.001
+  wing_span: 2.0
+  max_thrust: 0.0
+  cl0: 0.0
+  cl_alpha: 0.0
+  cd0: 0.0
+  cd_alpha_sq: 0.0
+  stall_alpha: 1.57
+
+engines: []
+gear: []
+
+orbit:
+  altitude_km: 1500000.0
+  inclination_deg: 0.1
+  raan_deg: 0.0
+  camera_pitch_deg: -89.0
+  lagrange_point: "L1"
+  fov_deg: 0.61
+
+stats:
+  distance: "1.5M km (L1)"
+  speed: "~0 m/s relative to Earth"
+  mass: "570 kg"
+  purpose: "Earth/Solar observation"

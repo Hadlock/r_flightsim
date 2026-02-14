@@ -101,8 +101,9 @@ impl SimRunner {
         let held = &self.held_keys;
         let c = &mut self.sim.controls;
 
-        // Elevator: Up arrow = nose up (+1), Down arrow = nose down (-1)
-        c.elevator = key_axis(held, KeyCode::ArrowUp, KeyCode::ArrowDown);
+        // Elevator: Down arrow = nose up (+1), Up arrow = nose down (-1)
+        // (flight-stick convention: push forward = nose down, pull back = nose up)
+        c.elevator = key_axis(held, KeyCode::ArrowDown, KeyCode::ArrowUp);
 
         // Aileron: Right arrow = roll right (+1), Left arrow = roll left (-1)
         c.aileron = key_axis(held, KeyCode::ArrowRight, KeyCode::ArrowLeft);

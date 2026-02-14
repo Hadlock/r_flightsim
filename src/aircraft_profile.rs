@@ -15,8 +15,11 @@ pub struct AircraftProfile {
     pub model: ModelSpec,
     pub physics: PhysicsSpec,
     pub engines: Vec<EngineSpec>,
+    #[serde(default)]
     pub gear: Vec<GearSpec>,
     pub stats: std::collections::HashMap<String, String>,
+    /// Optional orbital parameters — if present, starts in orbit instead of SFO
+    pub orbit: Option<OrbitSpec>,
 
     // Not in YAML - computed after loading
     #[serde(skip)]
@@ -56,6 +59,41 @@ pub struct EngineSpec {
 pub struct GearSpec {
     pub name: String,
     pub position: [f64; 3],
+}
+
+/// Orbital parameters for spacecraft profiles.
+#[derive(Deserialize, Debug, Clone)]
+pub struct OrbitSpec {
+    /// Altitude in km (for circular orbits) or perigee altitude
+    pub altitude_km: f64,
+    /// Apogee altitude in km (if different from altitude_km, orbit is elliptical)
+    #[serde(default)]
+    pub apogee_km: Option<f64>,
+    /// Orbital inclination in degrees
+    #[serde(default)]
+    pub inclination_deg: f64,
+    /// Right ascension of ascending node in degrees
+    #[serde(default)]
+    pub raan_deg: f64,
+    /// Argument of periapsis in degrees (for elliptical orbits)
+    #[serde(default)]
+    pub arg_periapsis_deg: f64,
+    /// True anomaly at start in degrees (where in orbit to begin)
+    #[serde(default)]
+    pub true_anomaly_deg: f64,
+    /// Initial camera pitch in degrees (default -90 = looking down/nadir)
+    #[serde(default = "default_camera_pitch")]
+    pub camera_pitch_deg: f64,
+    /// Lagrange point placement (e.g. "L1"). Positions toward sun at altitude_km distance.
+    #[serde(default)]
+    pub lagrange_point: Option<String>,
+    /// Custom FOV in degrees (overrides default 115). Useful for telescope views.
+    #[serde(default)]
+    pub fov_deg: Option<f64>,
+}
+
+fn default_camera_pitch() -> f64 {
+    -90.0
 }
 
 impl AircraftProfile {
@@ -183,6 +221,15 @@ pub fn load_all_profiles(base_path: &Path) -> Vec<AircraftProfile> {
             }
         }
     }
+
+    // Sort: planes/aircraft first, spacecraft/satellites last, alphabetical within each group
+    profiles.sort_by(|a, b| {
+        let a_is_space = a.category.eq_ignore_ascii_case("spacecraft")
+            || a.category.eq_ignore_ascii_case("satellite");
+        let b_is_space = b.category.eq_ignore_ascii_case("spacecraft")
+            || b.category.eq_ignore_ascii_case("satellite");
+        a_is_space.cmp(&b_is_space).then_with(|| a.name.cmp(&b.name))
+    });
 
     log::info!("Loaded {} aircraft profiles", profiles.len());
     profiles

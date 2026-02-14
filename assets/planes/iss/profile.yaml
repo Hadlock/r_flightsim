@@ -1,0 +1,37 @@
+name: "ISS"
+manufacturer: "International"
+country: "International"
+year: 1998
+description: "International Space Station. 408 km LEO orbit at 51.6 deg inclination. Orbital camera looking down at Earth."
+category: "Spacecraft"
+
+model:
+  obj: "../../obj_static/pyramid_giza.obj"
+
+physics:
+  mass: 420000.0
+  inertia: [100000000.0, 100000000.0, 100000000.0]
+  wing_area: 0.001
+  wing_span: 109.0
+  max_thrust: 0.0
+  cl0: 0.0
+  cl_alpha: 0.0
+  cd0: 0.0
+  cd_alpha_sq: 0.0
+  stall_alpha: 1.57
+
+engines: []
+gear: []
+
+orbit:
+  altitude_km: 408.0
+  inclination_deg: 51.6
+  raan_deg: 0.0
+  camera_pitch_deg: -89.0
+
+stats:
+  altitude: "408 km"
+  inclination: "51.6 deg"
+  speed: "7,668 m/s"
+  period: "92.5 min"
+  mass: "420,000 kg"

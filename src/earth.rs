@@ -6,16 +6,19 @@ use crate::obj_loader::Vertex;
 use crate::scene::SceneObject;
 
 /// LOD altitude thresholds: (max_altitude_m, lat/lon_step_degrees)
-const LOD_LEVELS: [(f64, f64); 5] = [
-    (1_524.0, 2.0),    //     0 – 5,000 ft:   2° grid
-    (9_144.0, 4.0),    // 5,000 – 30,000 ft:  4° grid
-    (30_480.0, 6.0),   // 30,000 – 100,000 ft: 6° grid
-    (500_000.0, 10.0), // 100,000 ft – 500 km: 10° grid
-    (f64::MAX, 15.0),  // 500 km+:             15° grid
+const LOD_LEVELS: [(f64, f64); 7] = [
+    (1_524.0, 2.0),        //     0 – 5,000 ft:   2° grid  (~32k tris)
+    (9_144.0, 4.0),        // 5,000 – 30,000 ft:  4° grid  (~8k tris)
+    (30_480.0, 6.0),       // 30,000 – 100,000 ft: 6° grid (~3.6k tris)
+    (500_000.0, 10.0),     // 100,000 ft – 500 km: 10° grid (~1.3k tris)
+    (2_000_000.0, 2.0),    // 500 km – 2,000 km:  2° grid  (~32k tris, smooth orbital view)
+    (10_000_000.0, 4.0),   // 2,000 – 10,000 km:  4° grid  (~8k tris)
+    (f64::MAX, 10.0),      // 10,000 km+:          10° grid (~1.3k tris)
 ];
 
-/// Rebuild threshold distances per LOD (meters camera must move)
-const REBUILD_THRESHOLD: [f64; 5] = [100.0, 100.0, 10_000.0, 10_000.0, 10_000.0];
+/// Rebuild threshold distances per LOD (meters camera must move).
+/// Orbital LODs use 0.0 = rebuild every frame (orbital speeds cause visible snapping otherwise).
+const REBUILD_THRESHOLD: [f64; 7] = [100.0, 100.0, 10_000.0, 10_000.0, 0.0, 0.0, 0.0];
 
 struct EarthLodData {
     vertices_ecef: Vec<DVec3>,
@@ -251,7 +254,9 @@ pub fn dynamic_far_plane(altitude_m: f64) -> f32 {
         5_000_000.0
     } else if altitude_m < 50_000_000.0 {
         100_000_000.0
+    } else if altitude_m < 500_000_000.0 {
+        500_000_000.0           // 500,000 km — lunar distance
     } else {
-        500_000_000.0
+        2_000_000_000.0         // 2B m = 2M km — encompasses L1 (1.5M km)
     }
 }

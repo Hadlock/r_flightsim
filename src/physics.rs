@@ -579,6 +579,158 @@ pub fn create_aircraft_at_sfo() -> RigidBody {
     body
 }
 
+/// Earth gravitational parameter (m³/s²)
+const GM_EARTH: f64 = 3.986_004_418e14;
+/// Mean Earth radius (m)
+const R_EARTH: f64 = 6_371_000.0;
+
+/// Create a RigidBody in orbit from orbital elements.
+/// Body frame is oriented prograde (X=velocity direction, Z=nadir).
+pub fn create_from_orbit(orbit: &crate::aircraft_profile::OrbitSpec) -> RigidBody {
+    let perigee_r = R_EARTH + orbit.altitude_km * 1000.0;
+    let apogee_r = match orbit.apogee_km {
+        Some(ap) => R_EARTH + ap * 1000.0,
+        None => perigee_r, // circular
+    };
+
+    let a = (perigee_r + apogee_r) / 2.0; // semi-major axis
+    let e = (apogee_r - perigee_r) / (apogee_r + perigee_r); // eccentricity
+
+    let inc = orbit.inclination_deg.to_radians();
+    let raan = orbit.raan_deg.to_radians();
+    let arg_pe = orbit.arg_periapsis_deg.to_radians();
+    let nu = orbit.true_anomaly_deg.to_radians(); // true anomaly
+
+    // Radius at true anomaly
+    let r = a * (1.0 - e * e) / (1.0 + e * nu.cos());
+
+    // Position and velocity in perifocal frame (P toward periapsis, Q 90° ahead)
+    let pos_pf = DVec3::new(r * nu.cos(), r * nu.sin(), 0.0);
+    let p = a * (1.0 - e * e); // semi-latus rectum
+    let mu_over_p = (GM_EARTH / p).sqrt();
+    let vel_pf = DVec3::new(-mu_over_p * nu.sin(), mu_over_p * (e + nu.cos()), 0.0);
+
+    // Rotation from perifocal to ECI (using RAAN, inclination, argument of periapsis)
+    let cos_raan = raan.cos();
+    let sin_raan = raan.sin();
+    let cos_inc = inc.cos();
+    let sin_inc = inc.sin();
+    let cos_argpe = arg_pe.cos();
+    let sin_argpe = arg_pe.sin();
+
+    // Perifocal-to-ECI rotation matrix columns
+    let px = cos_raan * cos_argpe - sin_raan * sin_argpe * cos_inc;
+    let py = sin_raan * cos_argpe + cos_raan * sin_argpe * cos_inc;
+    let pz = sin_argpe * sin_inc;
+
+    let qx = -cos_raan * sin_argpe - sin_raan * cos_argpe * cos_inc;
+    let qy = -sin_raan * sin_argpe + cos_raan * cos_argpe * cos_inc;
+    let qz = cos_argpe * sin_inc;
+
+    // Position and velocity in ECI (treated as ECEF by the physics engine)
+    let pos_ecef = DVec3::new(
+        px * pos_pf.x + qx * pos_pf.y,
+        py * pos_pf.x + qy * pos_pf.y,
+        pz * pos_pf.x + qz * pos_pf.y,
+    );
+    let vel_ecef = DVec3::new(
+        px * vel_pf.x + qx * vel_pf.y,
+        py * vel_pf.x + qy * vel_pf.y,
+        pz * vel_pf.x + qz * vel_pf.y,
+    );
+
+    // Body orientation: X=prograde, Z=nadir
+    let body_fwd = vel_ecef.normalize();
+    let nadir_approx = (-pos_ecef).normalize();
+    let body_right = nadir_approx.cross(body_fwd).normalize();
+    let body_down = body_fwd.cross(body_right).normalize();
+
+    let mat = DMat3::from_cols(body_fwd, body_right, body_down);
+    let orientation = DQuat::from_mat3(&mat);
+
+    let lla = coords::ecef_to_lla(pos_ecef);
+    let enu = coords::enu_frame_at(lla.lat, lla.lon, pos_ecef);
+
+    let mut body = RigidBody {
+        pos_ecef,
+        vel_ecef,
+        orientation,
+        angular_vel_body: DVec3::ZERO,
+        lla,
+        enu_frame: enu,
+        vel_enu: DVec3::ZERO,
+        groundspeed: 0.0,
+        vertical_speed: 0.0,
+        agl: lla.alt,
+        on_ground: false,
+    };
+    body.update_derived();
+
+    log::info!(
+        "[orbit] Alt: {:.0} km, Speed: {:.0} m/s, Inc: {:.1}°",
+        lla.alt / 1000.0,
+        vel_ecef.length(),
+        orbit.inclination_deg,
+    );
+
+    body
+}
+
+/// Create a RigidBody at a Lagrange point (L1: toward sun at given distance).
+/// `jd` is the Julian Date used to compute the sun direction.
+pub fn create_at_lagrange_point(distance_km: f64, jd: f64) -> RigidBody {
+    use crate::celestial::sun::sun_position;
+
+    let sun = sun_position(jd);
+    let sun_dir = sun.eci.normalize();
+
+    // Position: distance_km from Earth toward the sun (ECI, treated as ECEF by physics)
+    let pos_ecef = sun_dir * distance_km * 1000.0;
+
+    // Velocity: ~zero in ECI (co-orbits with Earth around Sun)
+    let vel_ecef = DVec3::ZERO;
+
+    // Orientation: body Z (down) toward Earth, body X perpendicular
+    let toward_earth = (-pos_ecef).normalize();
+    let body_down = toward_earth; // body Z
+
+    // Use ECI north as reference for "up"
+    let north = DVec3::new(0.0, 0.0, 1.0);
+    let body_right = body_down.cross(north).normalize(); // body Y = Z × ref
+    let body_fwd = body_right.cross(body_down).normalize(); // body X = Y × Z
+
+    let mat = DMat3::from_cols(body_fwd, body_right, body_down);
+    let orientation = DQuat::from_mat3(&mat);
+
+    let lla = coords::ecef_to_lla(pos_ecef);
+    let enu = coords::enu_frame_at(lla.lat, lla.lon, pos_ecef);
+
+    let mut body = RigidBody {
+        pos_ecef,
+        vel_ecef,
+        orientation,
+        angular_vel_body: DVec3::ZERO,
+        lla,
+        enu_frame: enu,
+        vel_enu: DVec3::ZERO,
+        groundspeed: 0.0,
+        vertical_speed: 0.0,
+        agl: lla.alt,
+        on_ground: false,
+    };
+    body.update_derived();
+
+    log::info!(
+        "[lagrange] L1 at {:.0} km from Earth, sun dir: ({:.3}, {:.3}, {:.3})",
+        distance_km,
+        sun_dir.x,
+        sun_dir.y,
+        sun_dir.z,
+    );
+
+    body
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,0 +1,37 @@
+name: "Hubble Space Telescope"
+manufacturer: "Lockheed"
+country: "United States"
+year: 1990
+description: "Hubble Space Telescope. 540 km LEO orbit at 28.5 deg inclination. Orbital camera looking down at Earth."
+category: "Spacecraft"
+
+model:
+  obj: "../../obj_static/pyramid_giza.obj"
+
+physics:
+  mass: 11110.0
+  inertia: [50000.0, 50000.0, 50000.0]
+  wing_area: 0.001
+  wing_span: 13.2
+  max_thrust: 0.0
+  cl0: 0.0
+  cl_alpha: 0.0
+  cd0: 0.0
+  cd_alpha_sq: 0.0
+  stall_alpha: 1.57
+
+engines: []
+gear: []
+
+orbit:
+  altitude_km: 540.0
+  inclination_deg: 28.5
+  raan_deg: 30.0
+  camera_pitch_deg: -89.0
+
+stats:
+  altitude: "540 km"
+  inclination: "28.5 deg"
+  speed: "7,595 m/s"
+  period: "95.4 min"
+  mass: "11,110 kg"

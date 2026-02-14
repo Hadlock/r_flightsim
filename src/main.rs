@@ -1,6 +1,7 @@
 mod ai_traffic;
 mod aircraft_profile;
 mod airport_gen;
+mod airport_markers;
 mod atc;
 mod camera;
 mod celestial;
@@ -84,6 +85,8 @@ struct FlyingState {
     // Celestial engine (sun, moon, planets, stars)
     celestial: celestial::CelestialEngine,
     celestial_indices: [usize; 5], // sun, moon, planets, prominent_stars, other_stars
+    // Airport proximity markers
+    airport_markers: Option<airport_markers::AirportMarkers>,
 }
 
 // ── Game state enum ─────────────────────────────────────────────────
@@ -225,10 +228,46 @@ impl App {
             gpu.config.width,
             gpu.config.height,
         );
-        let camera = Camera::new(gpu.config.width as f32 / gpu.config.height as f32);
 
-        // Physics setup
-        let aircraft_body = physics::create_aircraft_at_sfo();
+        // Parse epoch early — used by both physics (L1) and celestial engine
+        let epoch_unix = self.args.epoch.as_ref().and_then(|s| {
+            match celestial::time::iso8601_to_unix(s) {
+                Ok(unix) => Some(unix),
+                Err(e) => {
+                    log::warn!("Invalid --epoch '{}': {}, using system clock", s, e);
+                    None
+                }
+            }
+        });
+
+        // Extract orbit spec before consuming profile data
+        let orbit_spec = profile.as_ref().and_then(|p| p.orbit.clone());
+
+        let mut camera = Camera::new(gpu.config.width as f32 / gpu.config.height as f32);
+        // Set initial camera pitch for orbital profiles (e.g., -90° = looking down at Earth)
+        if let Some(orbit) = &orbit_spec {
+            camera.pitch = orbit.camera_pitch_deg.to_radians();
+            if let Some(fov) = orbit.fov_deg {
+                camera.fov_deg = fov as f32;
+            }
+        }
+
+        // Physics setup — orbit or ground start
+        let aircraft_body = match &orbit_spec {
+            Some(orbit) if orbit.lagrange_point.is_some() => {
+                let jd = celestial::time::unix_to_jd(
+                    epoch_unix.unwrap_or_else(|| {
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs_f64()
+                    }),
+                );
+                physics::create_at_lagrange_point(orbit.altitude_km, jd)
+            }
+            Some(orbit) => physics::create_from_orbit(orbit),
+            None => physics::create_aircraft_at_sfo(),
+        };
         let simulation = physics::Simulation::new(params, aircraft_body);
         let sim_runner = sim::SimRunner::new(simulation);
 
@@ -278,15 +317,6 @@ impl App {
         let model_to_body = model_to_body_rotation();
 
         // Celestial engine (sun, moon, planets, stars)
-        let epoch_unix = self.args.epoch.as_ref().and_then(|s| {
-            match celestial::time::iso8601_to_unix(s) {
-                Ok(unix) => Some(unix),
-                Err(e) => {
-                    log::warn!("Invalid --epoch '{}': {}, using system clock", s, e);
-                    None
-                }
-            }
-        });
         let celestial_engine = celestial::CelestialEngine::new(epoch_unix);
         let next_celestial_id = ai_base_id + ai_traffic.plane_count() as u32;
         let (celestial_objects, celestial_rel_indices) =
@@ -300,6 +330,17 @@ impl App {
             celestial_base + celestial_rel_indices[4],
         ];
         objects.extend(celestial_objects);
+
+        // Airport proximity markers (closest 1024 airports as pyramids)
+        let next_marker_id = next_celestial_id + 5;
+        let mut airport_markers =
+            airport_markers::AirportMarkers::new(airport_json);
+        if let Some(markers) = &mut airport_markers {
+            let markers_base = objects.len();
+            let marker_objects =
+                markers.create_scene_objects(&gpu.device, next_marker_id, markers_base);
+            objects.extend(marker_objects);
+        }
 
         // ATC system
         let num_ai = ai_traffic.plane_count();
@@ -395,6 +436,7 @@ impl App {
             tts_engine,
             celestial: celestial_engine,
             celestial_indices,
+            airport_markers,
         }));
     }
 
@@ -594,6 +636,11 @@ impl App {
                     flying.objects[idx].world_pos = pos;
                     flying.objects[idx].rotation =
                         sim::dquat_to_quat(orient) * flying.model_to_body;
+                }
+
+                // Update airport proximity markers
+                if let Some(markers) = &mut flying.airport_markers {
+                    markers.update(dt, flying.camera.position, &mut flying.objects);
                 }
 
                 // ATC tick

@@ -82,7 +82,27 @@ const MOON_LOD_THRESHOLDS: [(f64, u32); 4] = [
 
 const PLANET_ANGULAR_SIZE_RAD: f64 = 0.000_873; // ~0.05 degrees
 
-const MIN_RENDER_DISTANCE: f64 = 30_000.0; // 30 km minimum
+const EARTH_MEAN_RADIUS: f64 = 6_371_000.0; // meters
+
+/// Check if a direction from the camera is occluded by the earth.
+/// Returns true if the ray from camera in `dir` (unit vector) intersects the earth sphere.
+fn earth_occludes(camera_ecef: DVec3, dir: DVec3) -> bool {
+    let dist_to_center = camera_ecef.length();
+    if dist_to_center < EARTH_MEAN_RADIUS * 1.01 {
+        return false; // On or near surface, skip occlusion
+    }
+    // Cosine of the angle from camera-to-earth-center to the earth's limb
+    let cos_limb = (1.0 - (EARTH_MEAN_RADIUS / dist_to_center).powi(2)).sqrt();
+    // Direction from camera to earth center
+    let to_earth = (-camera_ecef).normalize();
+    // If dot product > cos_limb, the direction is within the earth's disc
+    dir.dot(to_earth) > cos_limb
+}
+
+/// Fixed render distance for celestial angular-size trick.
+/// Must be well inside even the smallest far plane (40 km at ground level)
+/// but far enough that angular-size geometry is precise.
+const CELESTIAL_RENDER_DISTANCE: f64 = 30_000.0; // 30 km — always inside far plane
 
 // ── CelestialEngine ─────────────────────────────────────────────────
 
@@ -300,59 +320,73 @@ impl CelestialEngine {
         indices: &[usize; 5],
         camera_ecef: DVec3,
         altitude_m: f64,
-        far_plane: f32,
+        _far_plane: f32,
     ) {
-        let render_distance = ((far_plane as f64) * 0.8).max(MIN_RENDER_DISTANCE);
+        let render_distance = CELESTIAL_RENDER_DISTANCE;
 
         // ── Sun ──
         let sun_dir = (self.sun_ecef - camera_ecef).normalize();
-        let sun_mesh = build_sun_mesh(
-            &self.sun_mesh,
-            sun_dir,
-            render_distance,
-            SUN_ANGULAR_DIAMETER_RAD,
-        );
-        update_dynamic_mesh(device, queue, &mut objects[indices[0]], &sun_mesh);
-        objects[indices[0]].world_pos = camera_ecef;
+        if earth_occludes(camera_ecef, sun_dir) {
+            objects[indices[0]].index_count = 0;
+        } else {
+            let sun_mesh = build_sun_mesh(
+                &self.sun_mesh,
+                sun_dir,
+                render_distance,
+                SUN_ANGULAR_DIAMETER_RAD,
+            );
+            update_dynamic_mesh(device, queue, &mut objects[indices[0]], &sun_mesh);
+            objects[indices[0]].world_pos = camera_ecef;
+        }
 
         // ── Moon ──
-        let moon_dist = (self.moon_ecef - camera_ecef).length();
-        let moon_lod = select_moon_lod(moon_dist);
-        if moon_lod != self.current_moon_lod {
-            self.current_moon_lod = moon_lod;
+        let moon_dir = (self.moon_ecef - camera_ecef).normalize();
+        if earth_occludes(camera_ecef, moon_dir) {
+            objects[indices[1]].index_count = 0;
+        } else {
+            let moon_dist = (self.moon_ecef - camera_ecef).length();
+            let moon_lod = select_moon_lod(moon_dist);
+            if moon_lod != self.current_moon_lod {
+                self.current_moon_lod = moon_lod;
+            }
+            let moon_mesh = build_moon_mesh(
+                &self.moon_meshes[moon_lod],
+                self.moon_ecef,
+                self.moon_distance_m,
+                MOON_DIAMETER,
+                camera_ecef,
+                render_distance,
+                MOON_TRUE_RENDER_THRESHOLD,
+            );
+            update_dynamic_mesh(device, queue, &mut objects[indices[1]], &moon_mesh);
+            objects[indices[1]].world_pos = camera_ecef;
         }
-        let moon_mesh = build_moon_mesh(
-            &self.moon_meshes[moon_lod],
-            self.moon_ecef,
-            self.moon_distance_m,
-            MOON_DIAMETER,
-            camera_ecef,
-            render_distance,
-            MOON_TRUE_RENDER_THRESHOLD,
-        );
-        update_dynamic_mesh(device, queue, &mut objects[indices[1]], &moon_mesh);
-        // When close to moon, world_pos is camera for camera-relative rebuild
-        // When far, also camera since we use angular-size trick
-        objects[indices[1]].world_pos = camera_ecef;
 
-        // ── Planets ──
-        let planet_dirs: Vec<DVec3> = self
-            .planet_ecef
-            .iter()
-            .map(|p| (*p - camera_ecef).normalize())
-            .collect();
-        let planet_sizes = vec![PLANET_ANGULAR_SIZE_RAD; 7];
-        let planet_mesh = build_merged_cubes(
-            &self.cube_mesh,
-            &planet_dirs,
-            &planet_sizes,
-            render_distance,
-            camera_ecef,
-        );
-        update_dynamic_mesh(device, queue, &mut objects[indices[2]], &planet_mesh);
-        objects[indices[2]].world_pos = camera_ecef;
+        // ── Planets (filter occluded) ──
+        let mut planet_dirs = Vec::with_capacity(7);
+        let mut planet_sizes = Vec::with_capacity(7);
+        for p in &self.planet_ecef {
+            let dir = (*p - camera_ecef).normalize();
+            if !earth_occludes(camera_ecef, dir) {
+                planet_dirs.push(dir);
+                planet_sizes.push(PLANET_ANGULAR_SIZE_RAD);
+            }
+        }
+        if planet_dirs.is_empty() {
+            objects[indices[2]].index_count = 0;
+        } else {
+            let planet_mesh = build_merged_cubes(
+                &self.cube_mesh,
+                &planet_dirs,
+                &planet_sizes,
+                render_distance,
+                camera_ecef,
+            );
+            update_dynamic_mesh(device, queue, &mut objects[indices[2]], &planet_mesh);
+            objects[indices[2]].world_pos = camera_ecef;
+        }
 
-        // ── Stars ──
+        // ── Stars (filter occluded) ──
         let show_stars = stars_visible(self.sun_altitude_deg, altitude_m);
 
         // Prominent stars
@@ -364,30 +398,50 @@ impl CelestialEngine {
                 objects[indices[3]].index_count = 0;
             }
             _ => {
-                let star_mesh_p = build_merged_cubes(
-                    &self.cube_mesh,
-                    &self.prominent_dirs_ecef,
-                    &self.prominent_sizes,
-                    render_distance,
-                    camera_ecef,
-                );
-                update_dynamic_mesh(device, queue, &mut objects[indices[3]], &star_mesh_p);
-                objects[indices[3]].world_pos = camera_ecef;
+                let (dirs, sizes): (Vec<_>, Vec<_>) = self
+                    .prominent_dirs_ecef
+                    .iter()
+                    .zip(self.prominent_sizes.iter())
+                    .filter(|(d, _)| !earth_occludes(camera_ecef, **d))
+                    .unzip();
+                if dirs.is_empty() {
+                    objects[indices[3]].index_count = 0;
+                } else {
+                    let star_mesh_p = build_merged_cubes(
+                        &self.cube_mesh,
+                        &dirs,
+                        &sizes,
+                        render_distance,
+                        camera_ecef,
+                    );
+                    update_dynamic_mesh(device, queue, &mut objects[indices[3]], &star_mesh_p);
+                    objects[indices[3]].world_pos = camera_ecef;
+                }
             }
         }
 
         // Other stars
         match self.star_toggle {
             StarToggleState::AllStars if show_stars => {
-                let star_mesh_o = build_merged_cubes(
-                    &self.cube_mesh,
-                    &self.other_dirs_ecef,
-                    &self.other_sizes,
-                    render_distance,
-                    camera_ecef,
-                );
-                update_dynamic_mesh(device, queue, &mut objects[indices[4]], &star_mesh_o);
-                objects[indices[4]].world_pos = camera_ecef;
+                let (dirs, sizes): (Vec<_>, Vec<_>) = self
+                    .other_dirs_ecef
+                    .iter()
+                    .zip(self.other_sizes.iter())
+                    .filter(|(d, _)| !earth_occludes(camera_ecef, **d))
+                    .unzip();
+                if dirs.is_empty() {
+                    objects[indices[4]].index_count = 0;
+                } else {
+                    let star_mesh_o = build_merged_cubes(
+                        &self.cube_mesh,
+                        &dirs,
+                        &sizes,
+                        render_distance,
+                        camera_ecef,
+                    );
+                    update_dynamic_mesh(device, queue, &mut objects[indices[4]], &star_mesh_o);
+                    objects[indices[4]].world_pos = camera_ecef;
+                }
             }
             _ => {
                 objects[indices[4]].index_count = 0;

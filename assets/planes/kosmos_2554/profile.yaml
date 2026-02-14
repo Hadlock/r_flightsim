@@ -1,0 +1,40 @@
+name: "Kosmos 2554"
+manufacturer: "NPO PM"
+country: "Russia"
+year: 2020
+description: "Kosmos 2554 in Molniya orbit. Highly elliptical (500 km x 39,867 km) at 63.4 deg inclination. Starting at perigee."
+category: "Spacecraft"
+
+model:
+  obj: "../../obj_static/pyramid_giza.obj"
+
+physics:
+  mass: 2000.0
+  inertia: [5000.0, 5000.0, 5000.0]
+  wing_area: 0.001
+  wing_span: 5.0
+  max_thrust: 0.0
+  cl0: 0.0
+  cl_alpha: 0.0
+  cd0: 0.0
+  cd_alpha_sq: 0.0
+  stall_alpha: 1.57
+
+engines: []
+gear: []
+
+orbit:
+  altitude_km: 500.0
+  apogee_km: 39867.0
+  inclination_deg: 63.4
+  raan_deg: 45.0
+  arg_periapsis_deg: 270.0
+  true_anomaly_deg: 0.0
+  camera_pitch_deg: -89.0
+
+stats:
+  perigee: "500 km"
+  apogee: "39,867 km"
+  inclination: "63.4 deg"
+  period: "~12 hours"
+  orbit_type: "Molniya"

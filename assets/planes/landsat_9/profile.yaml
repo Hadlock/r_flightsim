@@ -1,0 +1,37 @@
+name: "Landsat 9"
+manufacturer: "Northrop Grumman"
+country: "United States"
+year: 2021
+description: "Landsat 9 Earth-observing satellite. 705 km sun-synchronous orbit at 98.2 deg inclination (retrograde)."
+category: "Spacecraft"
+
+model:
+  obj: "../../obj_static/pyramid_giza.obj"
+
+physics:
+  mass: 2711.0
+  inertia: [8000.0, 8000.0, 8000.0]
+  wing_area: 0.001
+  wing_span: 5.0
+  max_thrust: 0.0
+  cl0: 0.0
+  cl_alpha: 0.0
+  cd0: 0.0
+  cd_alpha_sq: 0.0
+  stall_alpha: 1.57
+
+engines: []
+gear: []
+
+orbit:
+  altitude_km: 705.0
+  inclination_deg: 98.2
+  raan_deg: 120.0
+  camera_pitch_deg: -89.0
+
+stats:
+  altitude: "705 km"
+  inclination: "98.2 deg (SSO)"
+  speed: "7,505 m/s"
+  period: "99 min"
+  mass: "2,711 kg"
