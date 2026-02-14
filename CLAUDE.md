@@ -1,575 +1,423 @@
-# CLAUDE.md — shaderflight: ATC Radio Chatter System
+# CLAUDE.md — shaderflight: Piper TTS for ATC Radio
 
 ## Project Context
 
-shaderflight is a wgpu flight simulator with Sobel edge-detection wireframe rendering.
-All world math is WGS-84 ECEF with ENU local frames. See main CLAUDE.md for architecture.
+shaderflight is a wgpu flight simulator with Sobel wireframe rendering and an ATC radio
+chatter system that generates authentic FAA-phraseology text transmissions. See previous
+CLAUDE.md files for full architecture.
 
-Relevant existing systems:
-```
-ai_traffic.rs    – 5 AI Ki-61 planes flying figure-8s between 3 Bay Area waypoints
-telemetry.rs     – ratatui terminal dashboard (shared telemetry via Arc<Mutex<T>>)
-menu.rs          – egui overlay system (already integrated with wgpu)
-coords.rs        – lla_to_ecef, ecef_to_lla, enu_frame_at
-sim.rs           – SimRunner, player aircraft state
-```
+The ATC system (in `src/atc/`) generates `RadioMessage` structs with text, frequency,
+speaker info, and a `voice_id: u8` field that was reserved for exactly this purpose.
+Messages flow through `AtcManager` → `message_queue` → `message_log` and are displayed
+as text in both an egui overlay and a ratatui terminal panel.
 
-The AI traffic system has 5 planes with positions, headings, speeds, altitudes, and a
-NavState (Loiter/Transit). This ATC system hooks into that state to generate contextual
-radio transmissions.
+This task adds Piper TTS to speak those messages as audio.
 
 ---
 
-## Task: ATC Radio Chatter Generator
+## Voice Assets
 
-Generate authentic FAA-phraseology radio transmissions for AI traffic operating around
-SF Bay Area airports. The player eavesdrops on radio traffic (no player participation yet).
-Display as both an on-screen text overlay (egui) and a terminal radio log (ratatui).
-
-### Files to create
+Three Piper ONNX voices are in `assets/piper_voices/`:
 
 ```
-src/atc/mod.rs           – AtcManager, tick logic, message routing
-src/atc/phraseology.rs   – message templates, callsign generation, FAA formatting
-src/atc/facilities.rs    – airport/facility definitions, frequencies, runways
-src/atc/types.rs         – shared types (RadioMessage, Frequency, Callsign, etc.)
+assets/piper_voices/
+├── voice_a.onnx
+├── voice_a.onnx.json
+├── voice_b.onnx
+├── voice_b.onnx.json
+├── voice_c.onnx
+├── voice_c.onnx.json
+```
+
+Each `.onnx` is the model, the `.onnx.json` is the config (phoneme map, sample rate,
+speaker IDs, etc.). The actual filenames may differ — use whatever is in the directory.
+Load them at startup and keep them in memory.
+
+---
+
+## Architecture
+
+```
+src/tts/mod.rs       – TtsEngine: voice loading, synthesis, audio queue management
+src/tts/audio.rs     – Audio output (cpal): mixing, playback, radio filter
 ```
 
 Modify:
 ```
-main.rs          – instantiate AtcManager, tick it, pass messages to display
-ai_traffic.rs    – add ATC state per plane (callsign, current frequency, flight phase)
-telemetry.rs     – add radio log panel to the ratatui dashboard
-menu.rs          – add small radio text overlay during Flying state (or a new egui layer)
+main.rs              – initialize TtsEngine, wire it to AtcManager output
+src/atc/mod.rs       – when a message is delivered to message_log, also send it to TTS
+Cargo.toml           – add dependencies
 ```
 
 Do NOT modify: `renderer.rs`, shaders, `physics.rs`
 
 ---
 
-## ATC Facility Model
-
-### Hierarchy (simplified for Bay Area)
-
-```
-NorCal Approach (TRACON)
-├── SFO Tower          ← Class B, the big one
-├── OAK Tower          ← Class C
-├── SJC Tower          ← Class C
-├── HWD Tower          ← Hayward, Class D
-├── PAO Tower          ← Palo Alto, Class D
-└── SQL Tower          ← San Carlos, Class D
-```
-
-No Ground controllers. No Oakland Center. No ATIS. Keep it tight.
-
-### Facility Definition
-
-```rust
-pub struct AtcFacility {
-    name: &'static str,            // "SFO Tower", "NorCal Approach"
-    callsign: &'static str,        // "San Francisco Tower", "NorCal Approach"
-    facility_type: FacilityType,   // Tower or Approach
-    frequency: f32,                // MHz, e.g. 120.5
-    airport_ident: Option<&'static str>,  // "KSFO", "KOAK", etc.
-    position: (f64, f64),          // lat, lon (for distance calculations)
-    // Tower-specific
-    active_runways: Vec<Runway>,
-}
-
-pub enum FacilityType {
-    Approach,   // NorCal — handles transit, handoffs
-    Tower,      // Per-airport — handles takeoff, landing, pattern
-}
-
-pub struct Runway {
-    pub designator: &'static str,  // "28L", "19R"
-    pub heading: f64,              // magnetic heading in degrees
-}
-```
-
-### Real frequencies (use these for authenticity)
-
-```rust
-// NorCal Approach sectors (simplified — use one primary freq)
-NORCAL_APPROACH: 135.65
-
-// Tower frequencies
-KSFO_TOWER: 120.5
-KOAK_TOWER: 118.3
-KSJC_TOWER: 124.0
-KHWD_TOWER: 120.2
-KPAO_TOWER: 118.6
-KSQL_TOWER: 119.2
-```
-
-Active runways (pick one configuration, don't rotate):
-- KSFO: 28L, 28R (westbound ops, most common)
-- KOAK: 30
-- KSJC: 30L
-- KHWD: 28L
-- KPAO: 31
-- KSQL: 30
-
----
-
-## AI Plane ATC State
-
-Each AI plane in `ai_traffic.rs` gets additional ATC state:
-
-```rust
-pub struct AiPlaneAtcState {
-    pub callsign: Callsign,           // e.g. "Ki-61 niner-seven-bravo"
-    pub squawk: u16,                   // 4-digit transponder code
-    pub current_freq: f32,             // what frequency they're tuned to
-    pub flight_phase: FlightPhase,     // drives what ATC messages are generated
-    pub last_transmission: f64,        // timestamp of last radio call (prevent spam)
-}
-
-pub enum FlightPhase {
-    // Loitering planes (most of the 5 AI planes)
-    EnRoute,              // flying between waypoints, on NorCal Approach
-
-    // Pattern plane (1 dedicated plane doing touch-and-go at SFO)
-    Downwind,             // parallel to runway, opposite direction
-    Base,                 // turning toward runway
-    Final,                // lined up, descending
-    TouchAndGo,           // on the runway, about to go around
-    Crosswind,            // climbing out, turning crosswind
-    Departure,            // climbing, about to re-enter downwind
-}
-```
-
-### Callsign Format
-
-Use the real convention: aircraft type + tail number.
-
-```rust
-pub struct Callsign {
-    pub aircraft_type: &'static str,   // "Ki-61" — shortened type name
-    pub tail: String,                   // "97B", "42A", "66C" etc.
-}
-```
-
-Generate callsigns like: "Ki-61 niner-seven-bravo", "Ki-61 four-two-alpha".
-
-When a controller shortens it (after initial contact): "niner-seven-bravo".
-
-Phonetic alphabet for tail letters: Alpha, Bravo, Charlie, Delta, Echo (one per plane).
-Tail numbers: random 2-digit, seeded. E.g. "97B", "42A", "66C", "31D", "58E".
-
----
-
-## Message Generation
-
-### RadioMessage
-
-```rust
-pub struct RadioMessage {
-    pub timestamp: f64,        // sim time
-    pub frequency: f32,        // MHz
-    pub speaker: Speaker,      // who's talking
-    pub text: String,          // the spoken text
-    pub text_display: String,  // formatted for display (may include frequency tag)
-}
-
-pub enum Speaker {
-    Pilot(usize),              // AI plane index
-    Controller(String),        // facility name
-}
-```
-
-### Transmission Pairs
-
-Most ATC communications are call-and-response pairs. The manager generates both with a
-realistic delay between them:
-
-```
-[T+0.0s]  Pilot: "NorCal Approach, Ki-61 niner-seven-bravo, level two thousand four hundred"
-[T+2.5s]  ATC:   "Ki-61 niner-seven-bravo, NorCal Approach, radar contact, squawk two-four-five-one"
-```
-
-Delay between pilot call and controller response: 1.5–4.0 seconds (randomized).
-Delay between transmission pairs from the same plane: minimum 20 seconds.
-Overall system: aim for roughly one transmission every 5–15 seconds across all planes
-and facilities. Enough to sound like a moderately busy frequency, not overwhelming.
-
-### Message Templates by Flight Phase
-
-#### EnRoute (planes doing figure-8s, on NorCal Approach)
-
-Initial contact (once, when transitioning to transit between waypoints):
-```
-Pilot: "NorCal Approach, Ki-61 {callsign}, {altitude} feet, proceeding direct {nearest_waypoint_name}"
-ATC:   "Ki-61 {callsign}, NorCal Approach, radar contact, squawk {squawk}"
-```
-
-Periodic check-in (every 60–120 seconds while en route):
-```
-Pilot: "NorCal Approach, Ki-61 {callsign}, level {altitude}"
-ATC:   "Ki-61 {callsign}, roger"
-```
-
-Handoff when approaching an airport's airspace (within 8km of a towered field):
-```
-ATC:   "Ki-61 {callsign}, contact {airport} Tower on {frequency}"
-Pilot: "{airport} Tower, Ki-61 {callsign}, {altitude} feet, {distance} miles {direction}"
-Tower: "Ki-61 {callsign}, {airport} Tower, altimeter {altimeter}, report {landmark_or_position}"
-```
-
-#### Touch-and-Go Pattern at SFO (1 dedicated plane)
-
-Downwind:
-```
-Pilot: "San Francisco Tower, Ki-61 {callsign}, left downwind runway two-eight left"
-Tower: "Ki-61 {callsign}, number {sequence}, follow traffic on base"
-```
-
-or:
-```
-Tower: "Ki-61 {callsign}, San Francisco Tower, cleared for the option runway two-eight left"
-Pilot: "Cleared for the option two-eight left, {callsign}"
-```
-
-Base turn:
-```
-Pilot: "Ki-61 {callsign}, turning base"
-Tower: "Ki-61 {callsign}, roger"
-```
-
-Final:
-```
-Pilot: "Ki-61 {callsign}, short final two-eight left"
-Tower: "Ki-61 {callsign}, cleared touch and go runway two-eight left, wind two-seven-zero at {wind_speed}"
-Pilot: "Cleared touch and go, {callsign}"
-```
-
-After touch-and-go, departing:
-```
-Tower: "Ki-61 {callsign}, make left crosswind departure, contact NorCal on one-three-five-point-six-five when able"
-Pilot: "Left crosswind, NorCal on thirty-five sixty-five, {callsign}"
-```
-
-Re-entering downwind (back on tower freq):
-```
-Pilot: "San Francisco Tower, Ki-61 {callsign}, re-entering left downwind two-eight left, one thousand five hundred"
-Tower: "Ki-61 {callsign}, report midfield downwind"
-```
-
-#### Occasional Traffic Advisories (NorCal Approach, adds realism)
-
-```
-ATC: "Ki-61 {callsign}, traffic twelve o'clock, {distance} miles, {altitude}, type unknown"
-Pilot: "Looking for traffic, {callsign}"
-```
-
-or:
-```
-Pilot: "NorCal, Ki-61 {callsign}, requesting flight following"
-ATC: "Ki-61 {callsign}, squawk {squawk}, say altitude"
-Pilot: "{altitude} feet, {callsign}"
-ATC: "Ki-61 {callsign}, radar contact, {position}, altimeter three-zero-one-niner"
-```
-
----
-
-## FAA Phraseology Rules
-
-These matter for authenticity. Implement them in `phraseology.rs`:
-
-### Numbers
-- Altitudes: spoken in hundreds/thousands. "two thousand four hundred", "one thousand five hundred"
-- Headings: three digits, spoken individually. "heading two-seven-zero"
-- Runways: spoken individually. "runway two-eight left"
-- Frequencies: spoken with "point". "one-two-zero-point-five" or "thirty-five sixty-five" (informal shorthand for 135.65)
-- Squawk codes: four digits spoken individually. "squawk two-four-five-one"
-- Altimeter settings: "altimeter three-zero-one-niner"
-
-### Digit pronunciation
-```
-0 = "zero"
-1 = "one"
-2 = "two"
-3 = "three" (some say "tree" but use "three")
-4 = "four"
-5 = "five" (some say "fife" but use "five")
-6 = "six"
-7 = "seven"
-8 = "eight"
-9 = "niner"  ← always "niner", never "nine"
-```
-
-### Phonetic alphabet (for tail letters)
-```
-A = Alpha, B = Bravo, C = Charlie, D = Delta, E = Echo
-```
-
-### Key phrases
-- "Roger" = understood
-- "Wilco" = will comply
-- "Cleared for the option" = cleared for touch-and-go, stop-and-go, or full stop (pilot's choice)
-- "Say again" = repeat
-- "Affirmative" = yes
-- "Negative" = no
-- Readback: pilot reads back clearances. Controller reads back only critical items.
-- Callsign at END of pilot transmissions: "Cleared to land two-eight left, niner-seven-bravo"
-- Callsign at BEGINNING of controller transmissions: "Ki-61 niner-seven-bravo, cleared to land..."
-
-### Wind
-- "Wind two-seven-zero at eight" = 270° at 8 knots
-- Use fixed wind for now: 270° at 8 knots (typical SFO westerly)
-
-### Altimeter
-- Fixed for now: "three-zero-one-niner" (30.19 inHg, reasonable Bay Area value)
-
----
-
-## AtcManager
-
-```rust
-pub struct AtcManager {
-    facilities: Vec<AtcFacility>,
-    message_queue: VecDeque<RadioMessage>,    // upcoming messages (scheduled)
-    message_log: VecDeque<RadioMessage>,      // recent messages (for display)
-    max_log_size: usize,                       // keep last ~50 messages
-    sim_time: f64,
-    rng: StdRng,
-}
-```
-
-### Tick Logic (~1Hz is fine, no need to run every frame)
-
-```
-fn tick(&mut self, dt: f64, ai_planes: &[AiPlane], player_pos: DVec3) {
-    self.sim_time += dt;
-
-    // 1. Drain any scheduled messages whose timestamp has arrived
-    while let Some(msg) = self.message_queue.front() {
-        if msg.timestamp <= self.sim_time {
-            let msg = self.message_queue.pop_front().unwrap();
-            self.message_log.push_back(msg);
-            // trim log
-        } else {
-            break;
-        }
-    }
-
-    // 2. For each AI plane, check if its flight phase triggers a new transmission
-    for (i, plane) in ai_planes.iter().enumerate() {
-        if self.should_generate_transmission(i, plane) {
-            let messages = self.generate_transmission(i, plane);
-            for msg in messages {
-                self.message_queue.push_back(msg);
-            }
-        }
-    }
-
-    // 3. Occasionally generate ambient transmissions (traffic advisories, etc.)
-    //    to fill quiet gaps
-}
-```
-
-### Message Availability for Display
-
-```rust
-/// Get recent messages for display. Returns messages from the last N seconds.
-pub fn recent_messages(&self, seconds: f64) -> Vec<&RadioMessage> {
-    self.message_log.iter()
-        .filter(|m| self.sim_time - m.timestamp < seconds)
-        .collect()
-}
-
-/// Get the most recent message (for the on-screen overlay)
-pub fn latest_message(&self) -> Option<&RadioMessage> {
-    self.message_log.back()
-}
-```
-
----
-
-## Display: On-Screen Radio Overlay (egui)
-
-Small semi-transparent panel in the top-right corner during Flying state.
-Shows the last 3-4 radio transmissions, fading older ones.
-
-```
-┌─ COM1: 120.5 ─────────────────────────────┐
-│ SFO TWR: Ki-61 97B, cleared for the       │
-│          option runway 28L                 │
-│ 97B: Cleared for the option 28L, 97B      │
-│ NorCal: Ki-61 42A, radar contact           │
-└────────────────────────────────────────────┘
-```
-
-Styling:
-- Background: FSBLUE with ~80% opacity
-- Controller text: slightly brighter white or light cyan
-- Pilot text: slightly dimmer, light gray
-- Frequency header: small, top of panel
-- Messages fade out after 10-15 seconds
-- Show timestamp relative to sim time (optional, or just show most recent)
-- Monospace font if available (fits the cockpit instrument aesthetic)
-- Panel width: ~350-400px, right-aligned
-- Don't show frequency tuning UI yet — just display COM1 as whatever the most "interesting" local frequency is (SFO Tower if near SFO, NorCal Approach otherwise)
-
-Auto-tune logic for eavesdrop mode: pick the frequency with the most recent traffic
-near the player's position. This means the player "hears" the most relevant chatter
-without manually tuning.
-
----
-
-## Display: Terminal Radio Log (ratatui)
-
-Add a new panel to the telemetry dashboard, below the existing flight data panels.
-Shows a scrolling log of all radio transmissions on all frequencies.
-
-```
-┌─ Radio ──────────────────────────────────────────────────┐
-│ 120.5  SFO TWR  Ki-61 97B cleared for the option 28L    │
-│ 120.5  97B      Cleared for the option 28L              │
-│ 135.6  NorCal   Ki-61 42A radar contact squawk 2451     │
-│ 135.6  42A      NorCal Ki-61 42A level 2400             │
-│ 120.5  SFO TWR  Ki-61 97B report midfield downwind      │
-└──────────────────────────────────────────────────────────┘
-```
-
-Format: `{freq}  {speaker_short}  {text_condensed}`
-
-The telemetry SharedTelemetry struct needs a new field:
-```rust
-pub radio_log: Vec<RadioLogEntry>,  // last ~20 entries
-```
-
-Where:
-```rust
-pub struct RadioLogEntry {
-    pub frequency: f32,
-    pub speaker: String,     // short: "SFO TWR", "97B", "NorCal"
-    pub text: String,
-}
-```
-
----
-
-## AI Traffic Modifications
-
-### Dedicated Pattern Plane
-
-Modify `ai_traffic.rs` so that AI plane index 0 is a dedicated touch-and-go plane at SFO:
-
-- Fixed altitude: ~1500 ft (pattern altitude for SFO)
-- Fixed speed: ~120 kts (pattern speed)
-- NavState gets additional pattern states or the ATC flight phase drives its navigation
-- Flies a left-hand pattern for runway 28L:
-  - Upwind (departing 28L heading ~280°)
-  - Crosswind turn (left to ~190°)
-  - Downwind (heading ~100°, parallel to 28L, offset ~1nm south)
-  - Base turn (left to ~010°)
-  - Final (heading ~280°, aligned with 28L)
-  - Touch-and-go at the runway → back to upwind
-- This plane generates the most radio traffic
-
-The other 4 planes keep their existing figure-8 behavior and are tagged as EnRoute
-for ATC purposes. They get periodic NorCal Approach check-ins and occasional
-traffic advisories.
-
-### Callsign Assignment
-
-In `AiTrafficManager::new()`, assign callsigns to each plane:
-```rust
-plane 0: Ki-61 97B  (pattern plane)
-plane 1: Ki-61 42A
-plane 2: Ki-61 66C
-plane 3: Ki-61 31D
-plane 4: Ki-61 58E
-```
-
-### ATC State Initialization
-
-Each plane starts with:
-- Squawk: 2401 + plane_index (so 2401, 2402, 2403, 2404, 2405)
-- Frequency: 135.65 (NorCal Approach) for en-route planes, 120.5 (SFO Tower) for pattern plane
-- Flight phase: EnRoute for planes 1-4, Downwind for plane 0
-
----
-
-## Ambient / Filler Transmissions
-
-To keep the radio feeling alive during quiet periods, the AtcManager can inject
-occasional ambient transmissions that aren't tied to any visible AI plane. These
-represent traffic outside the player's visual range:
-
-```
-"NorCal Approach, Cessna three-two-six-papa-delta, request flight following to Sacramento"
-"Cessna three-two-six-papa-delta, NorCal Approach, squawk four-two-seven-one, say altitude"
-"United four-twelve heavy, NorCal Approach, descend and maintain three thousand"
-"Descending three thousand, United four-twelve heavy"
-```
-
-Use a pool of ~10-15 fake callsigns (mix of GA and airline):
-- Cessna + N-number style
-- Skylane + N-number
-- United / Southwest / Alaska + flight number
-- Bonanza, Cherokee, Cirrus + N-number
-
-These fire every 30–90 seconds during gaps. They add background texture.
-Generate them with random but plausible content (altitude assignments,
-heading changes, frequency changes, traffic advisories).
-
----
-
-## Implementation Notes
-
-- **phraseology.rs should be data-driven.** Template strings with placeholders,
-  not a giant match statement. Makes it easy to add more message types later.
-- **Timing is everything for realism.** Real radio has natural rhythm — a call,
-  a pause, a response. Get the delays right and it'll feel authentic even with
-  simple content. Get them wrong (instant responses, machine-gun pacing) and it
-  sounds like a chatbot.
-- **Don't block the main thread.** Message generation is cheap (string formatting),
-  so it can run synchronously in the game loop. No need for async/threads.
-  The 1Hz tick rate means negligible CPU cost.
-- **Seeded RNG** for the ambient transmissions too. Same radio chatter every run
-  during development, randomize later if desired.
-- **Player frequency auto-tuning:** For now, the "COM1" display frequency is
-  automatically set to the most relevant frequency based on player position.
-  Within 10nm of SFO → SFO Tower. Otherwise → NorCal Approach. Show all
-  messages on the terminal log regardless of frequency.
-- **Future TTS hooks:** Each RadioMessage should have enough metadata that a
-  future TTS system can pick the right voice (controller = calm/authoritative,
-  pilot = varied). The `Speaker` enum already distinguishes this. Add a
-  `voice_id: u8` field for future use.
-
----
-
 ## Dependencies
 
-No new dependencies. Uses existing: `rand` (from ai_traffic), `egui` (from menu),
-`ratatui`/`crossterm` (from telemetry).
+```toml
+# ONNX Runtime for Piper inference
+ort = "2"                          # onnxruntime Rust bindings
+# Audio output
+cpal = "0.15"                      # cross-platform audio
+# Audio processing
+rubato = "0.15"                    # sample rate conversion if needed
+```
+
+`ort` (the `ort` crate) is the maintained Rust ONNX Runtime binding. It bundles the
+ONNX Runtime dylib or can link to a system install. Use the bundled/download strategy
+so it just works on macOS M3:
+
+```toml
+ort = { version = "2", features = ["download-binaries"] }
+```
+
+---
+
+## Voice Assignment
+
+Each radio entity gets one of the three voices, assigned deterministically at startup:
+
+```rust
+pub struct VoiceAssignment {
+    voice_index: usize,    // 0, 1, or 2 — index into loaded voices
+    speed_factor: f32,     // speech rate multiplier (see below)
+}
+```
+
+Assignment strategy:
+- **Controllers** (NorCal Approach, SFO Tower, etc.): Pick from voices deterministically
+  by hashing the facility name. Controllers should sound calm and measured.
+  Speed factor: 1.1–1.2 (slightly faster than default, controllers are efficient).
+- **Pilots** (AI planes 0–6): Assign by `plane_idx % 3`. Pilots can be slightly more
+  varied in pace. Speed factor: 1.15–1.3 (pilots on busy frequencies talk briskly).
+- **Ambient** (phantom callsigns): Alternate between voices. Speed factor: 1.2.
+
+The `voice_id` field on `RadioMessage` maps to these assignments:
+- `0–6`: pilot by plane index
+- `100`: NorCal Approach controller
+- `101`: SFO Tower controller
+- `102–106`: other tower controllers
+- `200–201`: ambient speakers
+
+The TTS engine maintains a lookup table from `voice_id` → `VoiceAssignment`.
+
+---
+
+## Piper Inference Pipeline
+
+Piper TTS works as follows:
+1. **Text → Phoneme IDs**: Use the `.onnx.json` config to look up the phoneme map.
+   Piper uses espeak-ng phonemes internally, but the model's JSON config contains
+   a `phoneme_id_map` that maps characters to integer IDs. For English voices,
+   you can feed raw text characters through this map (Piper's "text" input mode)
+   or use espeak phonemes if available.
+2. **Phoneme IDs → ONNX model**: The model takes `input` (int64 tensor of phoneme IDs)
+   and `input_lengths` (int64 tensor, single value = length of input). It also takes
+   `scales` (float32 tensor of 3 values: `[noise_scale, length_scale, noise_w]`).
+   - `noise_scale`: controls expressiveness (0.667 is default)
+   - `length_scale`: controls speed — **lower = faster**. Default is 1.0.
+     For our "moderately fast radio" speech: use 0.75–0.85.
+   - `noise_w`: controls phoneme duration variation (0.8 is default)
+3. **Output**: The model produces a float32 audio tensor (raw PCM samples) at the
+   sample rate specified in the JSON config (typically 22050 Hz).
+
+### Speed Tuning
+
+This is critical for radio realism. Real ATC radio is notably faster than conversational
+speech but still intelligible. The `length_scale` parameter controls this directly:
+
+```
+length_scale = 1.0   → normal conversational speed (too slow for radio)
+length_scale = 0.85  → moderately fast (good baseline for radio)
+length_scale = 0.75  → brisk radio pace (controllers on busy frequency)
+length_scale = 0.65  → too fast, starts to sound robotic
+```
+
+Map the `speed_factor` from voice assignment to `length_scale`:
+```rust
+let length_scale = 1.0 / speed_factor;  // speed_factor 1.2 → length_scale 0.833
+```
+
+---
+
+## TTS Engine
+
+```rust
+pub struct TtsEngine {
+    // Loaded ONNX sessions (one per voice file)
+    voices: Vec<PiperVoice>,
+    // voice_id → VoiceAssignment lookup
+    assignments: HashMap<u8, VoiceAssignment>,
+    // Synthesis queue: messages waiting to be synthesized
+    synth_queue: Arc<Mutex<VecDeque<TtsRequest>>>,
+    // Audio queue: synthesized PCM waiting to be played
+    audio_queue: Arc<Mutex<VecDeque<AudioClip>>>,
+    // Synthesis thread handle
+    synth_thread: Option<JoinHandle<()>>,
+    // Shutdown flag
+    shutdown: Arc<AtomicBool>,
+}
+
+struct PiperVoice {
+    session: ort::Session,
+    config: PiperConfig,   // parsed from .onnx.json
+    sample_rate: u32,      // from config, typically 22050
+}
+
+struct PiperConfig {
+    phoneme_id_map: HashMap<char, Vec<i64>>,
+    // Other config fields as needed
+}
+
+struct TtsRequest {
+    text: String,
+    voice_index: usize,
+    speed_factor: f32,
+}
+
+struct AudioClip {
+    samples: Vec<f32>,     // mono PCM, normalized -1.0 to 1.0
+    sample_rate: u32,
+}
+```
+
+### Threading Model
+
+- **Synthesis thread**: A single dedicated thread that pulls from `synth_queue`,
+  runs ONNX inference (this is the slow part, ~50-200ms per utterance on M3),
+  and pushes results to `audio_queue`.
+- **Audio thread**: Managed by cpal. Pulls from `audio_queue` and feeds the
+  audio output device. Plays clips sequentially with a small gap (~300ms)
+  between transmissions.
+- **Main thread**: When `AtcManager` delivers a message to `message_log`,
+  also push a `TtsRequest` to the synthesis queue.
+
+This keeps synthesis off the main thread entirely. If synthesis can't keep up
+(unlikely with 3 voices on M3 and one message every 5-15 seconds), messages
+are dropped from the synth queue (oldest first).
+
+---
+
+## Radio Audio Effect (Post-Processing)
+
+Raw Piper output sounds too clean for radio. Apply a simple processing chain
+to each synthesized clip before queueing for playback:
+
+1. **Bandpass filter**: Radio comms are bandlimited to roughly 300–3400 Hz.
+   Apply a simple biquad bandpass (or high-pass at 300 Hz + low-pass at 3400 Hz).
+   This is the single most important effect for radio realism.
+
+2. **Light compression/clipping**: Radio audio is heavily compressed. Soft-clip
+   the signal at ~0.8 amplitude, then normalize to 0.7. This flattens dynamics.
+
+3. **Subtle noise bed**: Mix in very low-level white noise (-30dB) to simulate
+   radio static. Just enough to notice subconsciously.
+
+4. **Click transients**: Optionally add a very short (~5ms) click/pop at the
+   start and end of each transmission to simulate the PTT (push-to-talk) keying.
+   This is a surprisingly effective realism cue.
+
+Implement these as simple sample-by-sample operations in `audio.rs`. No need for
+an FFT or complex DSP library — biquad filters are ~10 lines of code.
+
+### Biquad Bandpass (reference implementation)
+
+```rust
+struct Biquad {
+    b0: f32, b1: f32, b2: f32,
+    a1: f32, a2: f32,
+    x1: f32, x2: f32,
+    y1: f32, y2: f32,
+}
+
+impl Biquad {
+    fn low_pass(sample_rate: f32, cutoff: f32, q: f32) -> Self { /* cookbook */ }
+    fn high_pass(sample_rate: f32, cutoff: f32, q: f32) -> Self { /* cookbook */ }
+
+    fn process(&mut self, x: f32) -> f32 {
+        let y = self.b0 * x + self.b1 * self.x1 + self.b2 * self.x2
+              - self.a1 * self.y1 - self.a2 * self.y2;
+        self.x2 = self.x1;
+        self.x1 = x;
+        self.y2 = self.y1;
+        self.y1 = y;
+        y
+    }
+}
+```
+
+Use Robert Bristow-Johnson's Audio EQ Cookbook formulas for the coefficients.
+
+---
+
+## Audio Playback (cpal)
+
+```rust
+pub struct AudioPlayer {
+    stream: cpal::Stream,          // kept alive for lifetime of playback
+    clip_queue: Arc<Mutex<VecDeque<AudioClip>>>,  // shared with TtsEngine
+    current_clip: Option<AudioClip>,
+    play_pos: usize,
+    gap_remaining: u32,            // samples of silence between clips
+}
+```
+
+### Setup
+
+1. Open default output device via cpal
+2. Get preferred output config (sample rate, channels)
+3. If output sample rate ≠ voice sample rate (22050), use `rubato` to resample.
+   Or: resample each clip after synthesis, before pushing to audio_queue, so the
+   audio callback is simple.
+4. Build the cpal output stream with a callback that:
+   - If playing a clip: copy samples to output buffer, advance position
+   - If clip finished: insert gap_remaining samples of silence (300ms worth),
+     then pop next clip from queue
+   - If queue empty: output silence
+5. Handle mono→stereo: duplicate mono samples to both channels if output is stereo
+
+### Volume
+
+ATC radio shouldn't be deafening. Default to ~40% of max volume. Eventually make
+this configurable in Settings, but hardcode for now.
+
+---
+
+## Integration with AtcManager
+
+In `atc/mod.rs`, when messages move from `message_queue` to `message_log`:
+
+```rust
+// In the tick() method, where messages are delivered:
+while let Some(msg) = self.message_queue.front() {
+    if msg.timestamp <= self.sim_time {
+        let msg = self.message_queue.pop_front().unwrap();
+        // NEW: send to TTS
+        if let Some(tts_tx) = &self.tts_sender {
+            let _ = tts_tx.send(TtsRequest {
+                text: msg.text.clone(),
+                voice_index: /* lookup from voice_id */,
+                speed_factor: /* lookup from voice_id */,
+            });
+        }
+        self.message_log.push_back(msg);
+        // ... trim log
+    } else {
+        break;
+    }
+}
+```
+
+Use a `crossbeam_channel` or `std::sync::mpsc` sender stored on `AtcManager` to
+decouple message delivery from synthesis. The TTS thread owns the receiver.
+
+### Text Cleanup for TTS
+
+Before sending text to Piper, clean up display-oriented formatting:
+- Strip callsign formatting artifacts
+- Ensure hyphens in spoken numbers are preserved (Piper handles "niner-seven-bravo" fine)
+- The FAA phraseology text is already designed to be spoken, so minimal cleanup needed
+
+---
+
+## Phoneme Mapping (Piper Text Mode)
+
+Piper's `.onnx.json` contains a `phoneme_id_map` that maps characters to phoneme IDs.
+For English models in "text" mode (not espeak phoneme mode), the mapping is typically:
+
+```json
+{
+  "phoneme_id_map": {
+    " ": [3],
+    "a": [10],
+    "b": [11],
+    ...
+  }
+}
+```
+
+The input pipeline:
+1. Lowercase the text
+2. Strip characters not in the phoneme map
+3. Add beginning-of-sequence and end-of-sequence tokens if the config specifies them
+   (check `phoneme_type` in config — if "espeak", you need espeak; if "text", direct char mapping)
+4. Insert padding tokens between phoneme IDs if the config's `phoneme_id_map` indicates
+   an `_` or `^`/`$` for BOS/EOS (model-specific, check the JSON)
+5. Build the int64 tensor and run inference
+
+**Important**: Many Piper voices use espeak phonemes, not raw text. Check the
+`phoneme_type` field in the JSON config. If it says `"espeak"`, you'll need to either:
+- Shell out to `espeak-ng --ipa` to phonemize text first (simplest, espeak-ng is ~5ms)
+- Use the `espeak-ng` C library via FFI
+- Use the `piper-rs` crate if one exists that handles this
+
+If the voices are English text-mode voices, direct character mapping works and is simpler.
+
+---
+
+## Startup Sequence
+
+1. Scan `assets/piper_voices/` for `.onnx` files
+2. For each, load the ONNX session via `ort` and parse the companion `.onnx.json`
+3. Build voice assignment table (voice_id → voice_index + speed_factor)
+4. Spawn synthesis thread
+5. Initialize cpal audio output
+6. Pass the TTS sender channel to AtcManager
+
+If voice loading fails (missing files, ONNX error), log a warning and continue
+without TTS. The text display system works independently.
+
+---
+
+## Performance Budget
+
+On M3 MacBook Pro:
+- Piper ONNX inference for a typical ATC sentence (~5-15 words): **50–200ms**
+- Messages arrive every 5–15 seconds
+- Synthesis thread has plenty of headroom (one synthesis per ~5s, each taking <200ms)
+- Audio output is trivial CPU cost
+- The radio filter (biquad + clipping) is negligible
+
+If synthesis occasionally takes longer (complex sentence, system load), the audio
+gap between transmissions just grows slightly — which actually sounds natural on radio.
+
+---
+
+## CLI Integration
+
+Add a flag to disable TTS (useful for development, testing, or systems without audio):
+
+```rust
+// In cli.rs Args struct:
+/// Disable TTS audio for ATC radio
+#[arg(long = "no-tts")]
+pub no_tts: bool,
+```
+
+When `--no-tts` is set, skip TTS initialization entirely. Text display still works.
 
 ---
 
 ## Do NOT
 
 - Modify `renderer.rs` or shaders
-- Implement player ATC participation (future work)
-- Implement frequency tuning UI (future work)
-- Model ATIS, ground control, or clearance delivery
-- Use real airline callsigns that could cause trademark issues (United/Southwest are fine
-  for a personal project, but note this if it ever goes public)
-- Over-engineer the scheduling — a VecDeque with timestamps is sufficient
-- Generate transmissions faster than one every 4-5 seconds (sounds like an auction house)
+- Block the main thread on ONNX inference
+- Use a TTS crate that bundles its own massive runtime (keep it lean with ort + piper models)
+- Implement voice activity detection or echo cancellation (not needed)
+- Try to lip-sync or animate anything to the audio
+- Play audio during Menu state (only during Flying state)
+- Panic if audio device is unavailable — gracefully fall back to text-only
 
 ---
 
 ## Verification
 
-After implementation, `cargo run --release -- -i` should show:
-- Radio text appearing in the top-right overlay during flight
-- Radio log scrolling in the terminal dashboard
-- Pattern plane (97B) generating tower calls as it circuits SFO
-- En-route planes getting occasional NorCal Approach check-ins
-- Ambient airline/GA callsigns filling quiet gaps
-- All transmissions using correct FAA digit pronunciation ("niner", not "nine")
-- Realistic pacing: ~1 transmission every 5-15 seconds, with natural call/response pairs
-- No transmission spam (minimum gaps enforced)
+After implementation, `cargo run --release -- -i` should:
+- Play synthesized speech through the speakers for each ATC radio transmission
+- Audio should sound like radio (bandpassed, slightly compressed, with PTT clicks)
+- Different speakers should have distinguishable voices
+- Speech pace should be moderately fast — brisk but intelligible (like real ATC)
+- No audio glitches, pops, or underruns during normal flight
+- Text overlay and terminal log continue to work alongside audio
+- `cargo run --release -- -i --no-tts` should work silently with text only
