@@ -680,21 +680,25 @@ pub fn create_from_orbit(orbit: &crate::aircraft_profile::OrbitSpec) -> RigidBod
 /// `jd` is the Julian Date used to compute the sun direction.
 pub fn create_at_lagrange_point(distance_km: f64, jd: f64) -> RigidBody {
     use crate::celestial::sun::sun_position;
+    use crate::celestial::{eci_to_ecef, time::gmst_deg};
 
     let sun = sun_position(jd);
-    let sun_dir = sun.eci.normalize();
+    // Convert sun position from ECI (J2000) to ECEF using GMST rotation
+    let gmst_rad = gmst_deg(jd).to_radians();
+    let sun_ecef = eci_to_ecef(sun.eci, gmst_rad);
+    let sun_dir = sun_ecef.normalize();
 
-    // Position: distance_km from Earth toward the sun (ECI, treated as ECEF by physics)
+    // Position: distance_km from Earth center toward the sun, in ECEF
     let pos_ecef = sun_dir * distance_km * 1000.0;
 
-    // Velocity: ~zero in ECI (co-orbits with Earth around Sun)
+    // Velocity: ~zero relative to Earth (co-orbits with Earth around Sun)
     let vel_ecef = DVec3::ZERO;
 
     // Orientation: body Z (down) toward Earth, body X perpendicular
     let toward_earth = (-pos_ecef).normalize();
     let body_down = toward_earth; // body Z
 
-    // Use ECI north as reference for "up"
+    // Use ECEF north as reference for "up"
     let north = DVec3::new(0.0, 0.0, 1.0);
     let body_right = body_down.cross(north).normalize(); // body Y = Z × ref
     let body_fwd = body_right.cross(body_down).normalize(); // body X = Y × Z
@@ -721,7 +725,7 @@ pub fn create_at_lagrange_point(distance_km: f64, jd: f64) -> RigidBody {
     body.update_derived();
 
     log::info!(
-        "[lagrange] L1 at {:.0} km from Earth, sun dir: ({:.3}, {:.3}, {:.3})",
+        "[lagrange] L1 at {:.0} km from Earth, ECEF sun dir: ({:.3}, {:.3}, {:.3})",
         distance_km,
         sun_dir.x,
         sun_dir.y,

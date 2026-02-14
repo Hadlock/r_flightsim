@@ -84,9 +84,11 @@ const PLANET_ANGULAR_SIZE_RAD: f64 = 0.000_873; // ~0.05 degrees
 
 const EARTH_MEAN_RADIUS: f64 = 6_371_000.0; // meters
 
-/// Check if a direction from the camera is occluded by the earth.
-/// Returns true if the ray from camera in `dir` (unit vector) intersects the earth sphere.
-fn earth_occludes(camera_ecef: DVec3, dir: DVec3) -> bool {
+/// Check if a celestial body at `body_ecef` is occluded by the earth as seen from `camera_ecef`.
+/// Returns true if the body is both within the earth's angular disc AND farther than the
+/// earth's near surface. This prevents incorrectly culling objects in front of Earth
+/// (e.g., the moon transiting Earth as seen from DSCOVR at L1).
+fn earth_occludes(camera_ecef: DVec3, dir: DVec3, body_ecef: DVec3) -> bool {
     let dist_to_center = camera_ecef.length();
     if dist_to_center < EARTH_MEAN_RADIUS * 1.01 {
         return false; // On or near surface, skip occlusion
@@ -95,8 +97,15 @@ fn earth_occludes(camera_ecef: DVec3, dir: DVec3) -> bool {
     let cos_limb = (1.0 - (EARTH_MEAN_RADIUS / dist_to_center).powi(2)).sqrt();
     // Direction from camera to earth center
     let to_earth = (-camera_ecef).normalize();
-    // If dot product > cos_limb, the direction is within the earth's disc
-    dir.dot(to_earth) > cos_limb
+    // If dot product <= cos_limb, the direction is outside Earth's disc — not occluded
+    if dir.dot(to_earth) <= cos_limb {
+        return false;
+    }
+    // Direction is within Earth's disc — check if the body is behind Earth (farther than
+    // the near surface). If the body is closer than Earth's near limb, it's in front.
+    let body_dist = (body_ecef - camera_ecef).length();
+    let earth_near_dist = dist_to_center - EARTH_MEAN_RADIUS;
+    body_dist > earth_near_dist
 }
 
 /// Fixed render distance for celestial angular-size trick.
@@ -326,7 +335,7 @@ impl CelestialEngine {
 
         // ── Sun ──
         let sun_dir = (self.sun_ecef - camera_ecef).normalize();
-        if earth_occludes(camera_ecef, sun_dir) {
+        if earth_occludes(camera_ecef, sun_dir, self.sun_ecef) {
             objects[indices[0]].index_count = 0;
         } else {
             let sun_mesh = build_sun_mesh(
@@ -341,7 +350,7 @@ impl CelestialEngine {
 
         // ── Moon ──
         let moon_dir = (self.moon_ecef - camera_ecef).normalize();
-        if earth_occludes(camera_ecef, moon_dir) {
+        if earth_occludes(camera_ecef, moon_dir, self.moon_ecef) {
             objects[indices[1]].index_count = 0;
         } else {
             let moon_dist = (self.moon_ecef - camera_ecef).length();
@@ -367,7 +376,7 @@ impl CelestialEngine {
         let mut planet_sizes = Vec::with_capacity(7);
         for p in &self.planet_ecef {
             let dir = (*p - camera_ecef).normalize();
-            if !earth_occludes(camera_ecef, dir) {
+            if !earth_occludes(camera_ecef, dir, *p) {
                 planet_dirs.push(dir);
                 planet_sizes.push(PLANET_ANGULAR_SIZE_RAD);
             }
@@ -398,11 +407,15 @@ impl CelestialEngine {
                 objects[indices[3]].index_count = 0;
             }
             _ => {
+                // Stars are infinitely far — use a far-away position for occlusion depth check
                 let (dirs, sizes): (Vec<_>, Vec<_>) = self
                     .prominent_dirs_ecef
                     .iter()
                     .zip(self.prominent_sizes.iter())
-                    .filter(|(d, _)| !earth_occludes(camera_ecef, **d))
+                    .filter(|(d, _)| {
+                        let far_pos = camera_ecef + **d * 1e12;
+                        !earth_occludes(camera_ecef, **d, far_pos)
+                    })
                     .unzip();
                 if dirs.is_empty() {
                     objects[indices[3]].index_count = 0;
@@ -427,7 +440,10 @@ impl CelestialEngine {
                     .other_dirs_ecef
                     .iter()
                     .zip(self.other_sizes.iter())
-                    .filter(|(d, _)| !earth_occludes(camera_ecef, **d))
+                    .filter(|(d, _)| {
+                        let far_pos = camera_ecef + **d * 1e12;
+                        !earth_occludes(camera_ecef, **d, far_pos)
+                    })
                     .unzip();
                 if dirs.is_empty() {
                     objects[indices[4]].index_count = 0;

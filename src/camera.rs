@@ -28,7 +28,7 @@ impl Camera {
     pub fn mouse_move(&mut self, dx: f64, dy: f64) {
         self.yaw += dx * self.mouse_sensitivity;
         self.pitch -= dy * self.mouse_sensitivity;
-        let pitch_limit = 89.0_f64.to_radians();
+        let pitch_limit = 90.0_f64.to_radians();
         let yaw_limit = 150.0_f64.to_radians();
         self.pitch = self.pitch.clamp(-pitch_limit, pitch_limit);
         self.yaw = self.yaw.clamp(-yaw_limit, yaw_limit);

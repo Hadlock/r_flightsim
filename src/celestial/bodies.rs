@@ -204,7 +204,7 @@ pub fn build_sun_mesh(
 pub fn build_moon_mesh(
     icosphere: &MeshData,
     moon_ecef: DVec3,
-    moon_distance_m: f64,
+    _moon_distance_m: f64,
     moon_diameter_m: f64,
     camera_ecef: DVec3,
     render_distance: f64,
@@ -216,7 +216,8 @@ pub fn build_moon_mesh(
     if dist > true_render_threshold {
         // Angular-size trick: render at fixed distance in correct direction
         let dir = to_moon / dist;
-        let angular_diameter = 2.0 * ((moon_diameter_m / 2.0) / moon_distance_m).atan();
+        // Use camera-to-moon distance (not geocentric) for correct angular size from any viewpoint
+        let angular_diameter = 2.0 * ((moon_diameter_m / 2.0) / dist).atan();
         let radius = render_distance * (angular_diameter / 2.0).tan();
         let rel = dir * render_distance;
 

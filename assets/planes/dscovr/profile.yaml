@@ -27,7 +27,7 @@ orbit:
   altitude_km: 1500000.0
   inclination_deg: 0.1
   raan_deg: 0.0
-  camera_pitch_deg: -89.0
+  camera_pitch_deg: -90.0
   lagrange_point: "L1"
   fov_deg: 0.61
 

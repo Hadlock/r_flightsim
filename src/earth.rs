@@ -10,8 +10,8 @@ const LOD_LEVELS: [(f64, f64); 7] = [
     (1_524.0, 2.0),        //     0 – 5,000 ft:   2° grid  (~32k tris)
     (9_144.0, 4.0),        // 5,000 – 30,000 ft:  4° grid  (~8k tris)
     (30_480.0, 6.0),       // 30,000 – 100,000 ft: 6° grid (~3.6k tris)
-    (500_000.0, 10.0),     // 100,000 ft – 500 km: 10° grid (~1.3k tris)
-    (2_000_000.0, 2.0),    // 500 km – 2,000 km:  2° grid  (~32k tris, smooth orbital view)
+    (200_000.0, 10.0),     // 100,000 ft – 200 km: 10° grid (~1.3k tris, suborbital)
+    (2_000_000.0, 2.0),    // 200 km – 2,000 km:  2° grid  (~32k tris, smooth orbital — ISS, HST, etc.)
     (10_000_000.0, 4.0),   // 2,000 – 10,000 km:  4° grid  (~8k tris)
     (f64::MAX, 10.0),      // 10,000 km+:          10° grid (~1.3k tris)
 ];
