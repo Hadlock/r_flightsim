@@ -67,6 +67,8 @@ pub struct AtcManager {
     rng: StdRng,
     /// Auto-tuned COM1 frequency for egui display.
     pub com1_freq: f32,
+    /// TTS sender (None if TTS disabled).
+    tts_sender: Option<crate::tts::TtsSender>,
 }
 
 impl AtcManager {
@@ -102,6 +104,7 @@ impl AtcManager {
             enroute_timers,
             rng,
             com1_freq: NORCAL_FREQ,
+            tts_sender: None,
         }
     }
 
@@ -119,6 +122,10 @@ impl AtcManager {
         while let Some(msg) = self.message_queue.front() {
             if msg.timestamp <= self.sim_time {
                 let msg = self.message_queue.pop_front().unwrap();
+                // Send to TTS
+                if let Some(ref tts) = self.tts_sender {
+                    tts.send(msg.voice_id, &msg.text);
+                }
                 self.message_log.push_back(msg);
                 while self.message_log.len() > self.max_log_size {
                     self.message_log.pop_front();
@@ -725,6 +732,11 @@ impl AtcManager {
     /// Get all messages in the log (for telemetry).
     pub fn message_log(&self) -> &VecDeque<RadioMessage> {
         &self.message_log
+    }
+
+    /// Set the TTS sender for speech synthesis.
+    pub fn set_tts_sender(&mut self, sender: crate::tts::TtsSender) {
+        self.tts_sender = Some(sender);
     }
 
     /// Advance en-route timers (called each tick with dt).

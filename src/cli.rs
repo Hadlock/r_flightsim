@@ -14,4 +14,8 @@ pub struct Args {
     /// Start in windowed mode (default is borderless fullscreen)
     #[arg(short = 'w', long = "windowed")]
     pub windowed: bool,
+
+    /// Disable TTS audio for ATC radio
+    #[arg(long = "no-tts")]
+    pub no_tts: bool,
 }

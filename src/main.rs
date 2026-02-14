@@ -12,6 +12,7 @@ mod renderer;
 mod scene;
 mod sim;
 mod telemetry;
+mod tts;
 
 use camera::Camera;
 use clap::Parser;
@@ -70,6 +71,8 @@ struct FlyingState {
     egui_ctx: egui::Context,
     egui_state: egui_winit::State,
     egui_renderer: egui_wgpu::Renderer,
+    // TTS engine (None if --no-tts or init failed)
+    tts_engine: Option<tts::TtsEngine>,
 }
 
 // ── Game state enum ─────────────────────────────────────────────────
@@ -258,10 +261,28 @@ impl App {
 
         // ATC system
         let num_ai = ai_traffic.plane_count();
-        let atc_manager = atc::AtcManager::new(num_ai);
+        let mut atc_manager = atc::AtcManager::new(num_ai);
         let atc_states: Vec<atc::types::AiPlaneAtcState> = (0..num_ai)
             .map(|i| atc::build_atc_state(i))
             .collect();
+
+        // TTS engine
+        let tts_engine = if !self.args.no_tts {
+            match tts::TtsEngine::new() {
+                Ok(engine) => {
+                    atc_manager.set_tts_sender(engine.tts_sender());
+                    log::info!("TTS engine initialized");
+                    Some(engine)
+                }
+                Err(e) => {
+                    log::warn!("TTS disabled: {}", e);
+                    None
+                }
+            }
+        } else {
+            log::info!("TTS disabled via --no-tts");
+            None
+        };
 
         // egui for flying radio overlay
         let egui_ctx = egui::Context::default();
@@ -320,6 +341,7 @@ impl App {
             egui_ctx,
             egui_state,
             egui_renderer,
+            tts_engine,
         }));
     }
 
