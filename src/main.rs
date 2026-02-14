@@ -1,3 +1,4 @@
+mod ai_traffic;
 mod aircraft_profile;
 mod airport_gen;
 mod camera;
@@ -61,6 +62,12 @@ struct FlyingState {
     aircraft_idx: usize,
     model_to_body: Quat,
     aircraft_name: String,
+    ai_traffic: ai_traffic::AiTrafficManager,
+    // TODO: ATC / radio calls — add AtcManager here.
+    // Text chat log rendered top-right corner (egui overlay or custom wgpu text).
+    // AtcManager ticks each frame, generates radio messages from AI traffic + tower,
+    // exposes a message queue for the UI, and provides a TTS callback hook
+    // (e.g. Box<dyn Fn(&str)>) so callers can plug in system TTS or a speech API.
 }
 
 // ── Game state enum ─────────────────────────────────────────────────
@@ -228,6 +235,23 @@ impl App {
         objects.push(aircraft_obj);
         let aircraft_idx = objects.len() - 1;
 
+        // AI traffic planes
+        let mut ai_traffic = ai_traffic::AiTrafficManager::new();
+        let ki61_path = Path::new("assets/planes/ki61_hien/model.obj");
+        let ai_base_id = next_id + 1;
+        let mut ai_scene_indices = Vec::new();
+        for i in 0..ai_traffic.plane_count() {
+            let obj = scene::load_aircraft_from_path(
+                &gpu.device,
+                ki61_path,
+                12.0,
+                ai_base_id + i as u32,
+            );
+            ai_scene_indices.push(objects.len());
+            objects.push(obj);
+        }
+        ai_traffic.set_scene_indices(ai_scene_indices);
+
         let model_to_body = model_to_body_rotation();
 
         // Grab cursor
@@ -263,6 +287,7 @@ impl App {
             aircraft_idx,
             model_to_body,
             aircraft_name,
+            ai_traffic,
         }));
     }
 
@@ -420,6 +445,23 @@ impl App {
                 aircraft.world_pos = render_state.pos_ecef;
                 aircraft.rotation =
                     sim::dquat_to_quat(render_state.orientation) * flying.model_to_body;
+
+                // Update AI traffic
+                flying.ai_traffic.update(dt);
+                let ai_count = flying.ai_traffic.plane_count();
+                for i in 0..ai_count {
+                    let idx = flying.ai_traffic.scene_indices()[i];
+                    let pos = flying.ai_traffic.planes()[i].pos_ecef;
+                    let orient = flying.ai_traffic.planes()[i].orientation;
+                    flying.objects[idx].world_pos = pos;
+                    flying.objects[idx].rotation =
+                        sim::dquat_to_quat(orient) * flying.model_to_body;
+                }
+
+                // TODO: ATC tick — advance AtcManager here (after physics, before render).
+                // It should consume AI traffic positions + player state to generate
+                // radio messages, then the overlay draws them top-right during render.
+                // TTS hook fires here for new messages: atc.tick(dt, &render_state, &ai_traffic);
 
                 // Render
                 let output = match gpu.surface.get_current_texture() {
