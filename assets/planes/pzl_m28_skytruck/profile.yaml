@@ -1,0 +1,47 @@
+# Aircraft Profile — PZL M28 Skytruck
+name: "PZL M28 Skytruck"
+manufacturer: "PZL Mielec"
+country: "Poland"
+year: 1984
+description: "STOL utility transport aircraft derived from the Antonov An-28, powered by twin PT6A turboprops."
+category: "Utility Transport"
+
+model:
+  obj: "model.obj"
+
+physics:
+  mass: 4200.0
+  inertia: [12000.0, 22000.0, 30000.0]
+  wing_area: 39.7
+  wing_span: 22.06
+  max_thrust: 11000.0
+  cl0: 0.35
+  cl_alpha: 5.8
+  cd0: 0.032
+  cd_alpha_sq: 0.04
+  stall_alpha: 0.24
+
+engines:
+  - name: "Pratt & Whitney Canada PT6A-65B #1"
+    type: "turboprop"
+    thrust: 5500.0
+  - name: "Pratt & Whitney Canada PT6A-65B #2"
+    type: "turboprop"
+    thrust: 5500.0
+
+gear:
+  - name: "nose_wheel"
+    position: [4.0, 0.0, 2.0]
+  - name: "left_main"
+    position: [-0.3, -2.0, 2.0]
+  - name: "right_main"
+    position: [-0.3, 2.0, 2.0]
+
+stats:
+  wing_area: "39.7 m²"
+  wing_span: "22.06 m"
+  max_thrust: "11,000 N"
+  mass: "4,200 kg"
+  max_speed: "355 km/h"
+  range: "1,500 km"
+  ceiling: "6,000 m"

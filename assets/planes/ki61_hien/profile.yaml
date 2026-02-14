@@ -1,0 +1,44 @@
+# Aircraft Profile — Ki-61 Hien
+name: "Ki-61 Hien"
+manufacturer: "Kawasaki"
+country: "Japan"
+year: 1942
+description: "Imperial Japanese Army single-seat fighter, powered by a liquid-cooled Ha-40 inline engine."
+category: "WWII Fighter"
+
+model:
+  obj: "model.obj"
+
+physics:
+  mass: 2630.0
+  inertia: [8000.0, 20000.0, 25000.0]
+  wing_area: 20.0
+  wing_span: 12.0
+  max_thrust: 8500.0
+  cl0: 0.2
+  cl_alpha: 5.0
+  cd0: 0.025
+  cd_alpha_sq: 0.04
+  stall_alpha: 0.28
+
+engines:
+  - name: "Kawasaki Ha-40"
+    type: "inline-piston"
+    thrust: 8500.0
+
+gear:
+  - name: "left_main"
+    position: [1.0, -2.0, 2.0]
+  - name: "right_main"
+    position: [1.0, 2.0, 2.0]
+  - name: "tail_wheel"
+    position: [-5.0, 0.0, 1.5]
+
+stats:
+  wing_area: "20.0 m²"
+  wing_span: "12.0 m"
+  max_thrust: "8,500 N"
+  mass: "2,630 kg"
+  max_speed: "590 km/h"
+  range: "1,100 km"
+  ceiling: "11,400 m"

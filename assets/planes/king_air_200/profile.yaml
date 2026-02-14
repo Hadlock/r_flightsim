@@ -1,0 +1,47 @@
+# Aircraft Profile — King Air 200
+name: "King Air 200"
+manufacturer: "Beechcraft"
+country: "United States"
+year: 1974
+description: "Twin-turboprop pressurized business and utility aircraft, one of the most popular turboprops ever built."
+category: "Business Turboprop"
+
+model:
+  obj: "model.obj"
+
+physics:
+  mass: 5670.0
+  inertia: [18000.0, 35000.0, 45000.0]
+  wing_area: 28.15
+  wing_span: 16.61
+  max_thrust: 14000.0
+  cl0: 0.25
+  cl_alpha: 5.3
+  cd0: 0.025
+  cd_alpha_sq: 0.04
+  stall_alpha: 0.26
+
+engines:
+  - name: "Pratt & Whitney Canada PT6A-42 #1"
+    type: "turboprop"
+    thrust: 7000.0
+  - name: "Pratt & Whitney Canada PT6A-42 #2"
+    type: "turboprop"
+    thrust: 7000.0
+
+gear:
+  - name: "nose_wheel"
+    position: [3.5, 0.0, 2.0]
+  - name: "left_main"
+    position: [-0.3, -2.0, 2.0]
+  - name: "right_main"
+    position: [-0.3, 2.0, 2.0]
+
+stats:
+  wing_area: "28.15 m²"
+  wing_span: "16.61 m"
+  max_thrust: "14,000 N"
+  mass: "5,670 kg"
+  max_speed: "545 km/h"
+  range: "3,340 km"
+  ceiling: "10,700 m"

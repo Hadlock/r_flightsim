@@ -1,0 +1,53 @@
+# Aircraft Profile — B-1 Lancer
+name: "B-1 Lancer"
+manufacturer: "Rockwell International"
+country: "United States"
+year: 1986
+description: "Supersonic variable-sweep wing strategic bomber with blended wing-body design, capable of Mach 1.25 at altitude."
+category: "Strategic Bomber"
+
+model:
+  obj: "model.obj"
+
+physics:
+  mass: 87100.0
+  inertia: [1500000.0, 10000000.0, 11000000.0]
+  wing_area: 181.2
+  wing_span: 41.8
+  max_thrust: 540000.0
+  cl0: 0.15
+  cl_alpha: 4.5
+  cd0: 0.018
+  cd_alpha_sq: 0.05
+  stall_alpha: 0.32
+
+engines:
+  - name: "General Electric F101-GE-102 #1"
+    type: "turbofan"
+    thrust: 135000.0
+  - name: "General Electric F101-GE-102 #2"
+    type: "turbofan"
+    thrust: 135000.0
+  - name: "General Electric F101-GE-102 #3"
+    type: "turbofan"
+    thrust: 135000.0
+  - name: "General Electric F101-GE-102 #4"
+    type: "turbofan"
+    thrust: 135000.0
+
+gear:
+  - name: "nose_wheel"
+    position: [15.0, 0.0, 3.0]
+  - name: "left_main"
+    position: [-1.0, -3.0, 3.0]
+  - name: "right_main"
+    position: [-1.0, 3.0, 3.0]
+
+stats:
+  wing_area: "181.2 m²"
+  wing_span: "41.8 m"
+  max_thrust: "540,000 N"
+  mass: "87,100 kg"
+  max_speed: "1,448 km/h"
+  range: "12,000 km"
+  ceiling: "18,000 m"

@@ -1,0 +1,53 @@
+# Aircraft Profile — Concorde
+name: "Concorde"
+manufacturer: "Aérospatiale/BAC"
+country: "France/United Kingdom"
+year: 1969
+description: "Supersonic passenger airliner with a slender delta wing, capable of Mach 2.04 cruise. Retired in 2003."
+category: "Supersonic Airliner"
+
+model:
+  obj: "model.obj"
+
+physics:
+  mass: 78700.0
+  inertia: [2000000.0, 15000000.0, 16000000.0]
+  wing_area: 358.25
+  wing_span: 25.6
+  max_thrust: 676000.0
+  cl0: 0.1
+  cl_alpha: 3.5
+  cd0: 0.016
+  cd_alpha_sq: 0.06
+  stall_alpha: 0.35
+
+engines:
+  - name: "Rolls-Royce/Snecma Olympus 593 #1"
+    type: "turbojet"
+    thrust: 169000.0
+  - name: "Rolls-Royce/Snecma Olympus 593 #2"
+    type: "turbojet"
+    thrust: 169000.0
+  - name: "Rolls-Royce/Snecma Olympus 593 #3"
+    type: "turbojet"
+    thrust: 169000.0
+  - name: "Rolls-Royce/Snecma Olympus 593 #4"
+    type: "turbojet"
+    thrust: 169000.0
+
+gear:
+  - name: "nose_wheel"
+    position: [15.0, 0.0, 3.0]
+  - name: "left_main"
+    position: [-2.0, -3.0, 3.0]
+  - name: "right_main"
+    position: [-2.0, 3.0, 3.0]
+
+stats:
+  wing_area: "358.25 m²"
+  wing_span: "25.6 m"
+  max_thrust: "676,000 N"
+  mass: "78,700 kg"
+  max_speed: "2,179 km/h"
+  range: "7,250 km"
+  ceiling: "18,300 m"

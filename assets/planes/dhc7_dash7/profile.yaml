@@ -1,0 +1,53 @@
+# Aircraft Profile — DHC-7 Dash 7
+name: "DHC-7 Dash 7"
+manufacturer: "de Havilland Canada"
+country: "Canada"
+year: 1975
+description: "Four-engine STOL turboprop regional airliner, famous for its quiet operation and short-field performance."
+category: "Regional STOL Airliner"
+
+model:
+  obj: "model.obj"
+
+physics:
+  mass: 19958.0
+  inertia: [80000.0, 150000.0, 200000.0]
+  wing_area: 79.9
+  wing_span: 28.35
+  max_thrust: 36000.0
+  cl0: 0.35
+  cl_alpha: 5.7
+  cd0: 0.030
+  cd_alpha_sq: 0.04
+  stall_alpha: 0.22
+
+engines:
+  - name: "Pratt & Whitney Canada PT6A-50 #1"
+    type: "turboprop"
+    thrust: 9000.0
+  - name: "Pratt & Whitney Canada PT6A-50 #2"
+    type: "turboprop"
+    thrust: 9000.0
+  - name: "Pratt & Whitney Canada PT6A-50 #3"
+    type: "turboprop"
+    thrust: 9000.0
+  - name: "Pratt & Whitney Canada PT6A-50 #4"
+    type: "turboprop"
+    thrust: 9000.0
+
+gear:
+  - name: "nose_wheel"
+    position: [6.0, 0.0, 2.5]
+  - name: "left_main"
+    position: [-0.5, -2.5, 2.5]
+  - name: "right_main"
+    position: [-0.5, 2.5, 2.5]
+
+stats:
+  wing_area: "79.9 m²"
+  wing_span: "28.35 m"
+  max_thrust: "36,000 N"
+  mass: "19,958 kg"
+  max_speed: "428 km/h"
+  range: "1,300 km"
+  ceiling: "6,400 m"

@@ -1,0 +1,47 @@
+# Aircraft Profile — Boeing 737-400
+name: "Boeing 737-400"
+manufacturer: "Boeing"
+country: "United States"
+year: 1988
+description: "Stretched variant of the 737 Classic series, a short-to-medium-range narrow-body twinjet airliner."
+category: "Narrow-Body Airliner"
+
+model:
+  obj: "model.obj"
+
+physics:
+  mass: 56200.0
+  inertia: [600000.0, 2500000.0, 3000000.0]
+  wing_area: 105.4
+  wing_span: 28.9
+  max_thrust: 178000.0
+  cl0: 0.2
+  cl_alpha: 5.3
+  cd0: 0.022
+  cd_alpha_sq: 0.04
+  stall_alpha: 0.28
+
+engines:
+  - name: "CFM International CFM56-3C1 #1"
+    type: "turbofan"
+    thrust: 89000.0
+  - name: "CFM International CFM56-3C1 #2"
+    type: "turbofan"
+    thrust: 89000.0
+
+gear:
+  - name: "nose_wheel"
+    position: [10.0, 0.0, 3.0]
+  - name: "left_main"
+    position: [-1.0, -2.5, 3.0]
+  - name: "right_main"
+    position: [-1.0, 2.5, 3.0]
+
+stats:
+  wing_area: "105.4 m²"
+  wing_span: "28.9 m"
+  max_thrust: "178,000 N"
+  mass: "56,200 kg"
+  max_speed: "912 km/h"
+  range: "5,000 km"
+  ceiling: "11,300 m"

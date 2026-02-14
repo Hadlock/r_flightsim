@@ -1,0 +1,47 @@
+# Aircraft Profile — OV-10A Bronco
+name: "OV-10A Bronco"
+manufacturer: "North American Rockwell"
+country: "United States"
+year: 1967
+description: "Twin-turboprop light attack and observation aircraft with twin-boom fuselage, designed for forward air control and COIN operations."
+category: "Light Attack / Observation"
+
+model:
+  obj: "model.obj"
+
+physics:
+  mass: 4494.0
+  inertia: [15000.0, 25000.0, 35000.0]
+  wing_area: 27.03
+  wing_span: 12.19
+  max_thrust: 14000.0
+  cl0: 0.25
+  cl_alpha: 5.2
+  cd0: 0.030
+  cd_alpha_sq: 0.04
+  stall_alpha: 0.27
+
+engines:
+  - name: "Garrett T76-G-416/417 #1"
+    type: "turboprop"
+    thrust: 7000.0
+  - name: "Garrett T76-G-416/417 #2"
+    type: "turboprop"
+    thrust: 7000.0
+
+gear:
+  - name: "nose_wheel"
+    position: [3.0, 0.0, 2.0]
+  - name: "left_main"
+    position: [-0.3, -1.8, 2.0]
+  - name: "right_main"
+    position: [-0.3, 1.8, 2.0]
+
+stats:
+  wing_area: "27.03 m²"
+  wing_span: "12.19 m"
+  max_thrust: "14,000 N"
+  mass: "4,494 kg"
+  max_speed: "452 km/h"
+  range: "2,300 km"
+  ceiling: "7,300 m"

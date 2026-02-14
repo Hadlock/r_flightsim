@@ -1,0 +1,47 @@
+# Aircraft Profile — A320neo
+name: "A320neo"
+manufacturer: "Airbus"
+country: "European Union"
+year: 2016
+description: "Narrow-body single-aisle airliner with new engine option, the backbone of short-to-medium-haul aviation worldwide."
+category: "Narrow-Body Airliner"
+
+model:
+  obj: "model.obj"
+
+physics:
+  mass: 64300.0
+  inertia: [800000.0, 3500000.0, 4000000.0]
+  wing_area: 122.6
+  wing_span: 35.8
+  max_thrust: 240000.0
+  cl0: 0.2
+  cl_alpha: 5.5
+  cd0: 0.020
+  cd_alpha_sq: 0.04
+  stall_alpha: 0.30
+
+engines:
+  - name: "CFM LEAP-1A #1"
+    type: "turbofan"
+    thrust: 120000.0
+  - name: "CFM LEAP-1A #2"
+    type: "turbofan"
+    thrust: 120000.0
+
+gear:
+  - name: "nose_wheel"
+    position: [12.0, 0.0, 3.0]
+  - name: "left_main"
+    position: [-1.0, -3.0, 3.0]
+  - name: "right_main"
+    position: [-1.0, 3.0, 3.0]
+
+stats:
+  wing_area: "122.6 m²"
+  wing_span: "35.8 m"
+  max_thrust: "240,000 N"
+  mass: "64,300 kg"
+  max_speed: "871 km/h"
+  range: "6,300 km"
+  ceiling: "12,000 m"

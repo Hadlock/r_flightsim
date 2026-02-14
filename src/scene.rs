@@ -29,13 +29,13 @@ impl SceneObject {
     }
 }
 
-struct MeshBuffers {
-    vertex_buf: wgpu::Buffer,
-    index_buf: wgpu::Buffer,
-    index_count: u32,
+pub struct MeshBuffers {
+    pub vertex_buf: wgpu::Buffer,
+    pub index_buf: wgpu::Buffer,
+    pub index_count: u32,
 }
 
-fn upload_mesh(device: &wgpu::Device, mesh: &MeshData, label: &str) -> MeshBuffers {
+pub fn upload_mesh(device: &wgpu::Device, mesh: &MeshData, label: &str) -> MeshBuffers {
     let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some(&format!("{} Vertex Buffer", label)),
         contents: bytemuck::cast_slice(&mesh.vertices),
@@ -53,7 +53,7 @@ fn upload_mesh(device: &wgpu::Device, mesh: &MeshData, label: &str) -> MeshBuffe
     }
 }
 
-fn spawn(
+pub fn spawn(
     device: &wgpu::Device,
     mesh: &MeshData,
     name: &str,
@@ -76,11 +76,11 @@ fn spawn(
     }
 }
 
-/// Load the Ki-61 aircraft model as a SceneObject.
+/// Load the Ki-61 aircraft model as a SceneObject (legacy fallback).
 /// Position and rotation are set to defaults — caller updates them each frame.
 pub fn load_aircraft_object(device: &wgpu::Device, object_id: u32) -> SceneObject {
     let mesh = obj_loader::load_obj(Path::new(
-        "assets/obj_static/14082_WWII_Plane_Japan_Kawasaki_Ki-61_v1_L2.obj",
+        "assets/planes/ki61_hien/model.obj",
     ));
     // Ki-61: 12m wingspan, OBJ wingspan extent is ~2.2019 units
     let scale = 12.0 / 2.2019;
@@ -93,6 +93,52 @@ pub fn load_aircraft_object(device: &wgpu::Device, object_id: u32) -> SceneObjec
         scale as f32,
         object_id,
     )
+}
+
+/// Create a SceneObject from pre-loaded MeshData with a given scale.
+pub fn create_scene_object(
+    device: &wgpu::Device,
+    mesh: &MeshData,
+    name: &str,
+    scale: f32,
+    object_id: u32,
+) -> SceneObject {
+    spawn(device, mesh, name, DVec3::ZERO, Quat::IDENTITY, scale, object_id)
+}
+
+/// Load an aircraft OBJ and create a SceneObject scaled to its real wingspan.
+/// `obj_path`: path to the OBJ file
+/// `wingspan`: real-world wingspan in meters
+/// `obj_wingspan`: wingspan extent in OBJ model units (if known, otherwise use 1.0 and set scale manually)
+pub fn load_aircraft_from_path(
+    device: &wgpu::Device,
+    obj_path: &Path,
+    wingspan: f64,
+    object_id: u32,
+) -> SceneObject {
+    let mesh = obj_loader::load_obj(obj_path);
+    // Compute OBJ model extent along Y axis (wingspan direction)
+    let mut min_y = f32::INFINITY;
+    let mut max_y = f32::NEG_INFINITY;
+    for v in &mesh.vertices {
+        min_y = min_y.min(v.position[1]);
+        max_y = max_y.max(v.position[1]);
+    }
+    let obj_span = (max_y - min_y).max(0.001);
+    let scale = wingspan as f32 / obj_span;
+    spawn(device, &mesh, "aircraft", DVec3::ZERO, Quat::IDENTITY, scale, object_id)
+}
+
+/// Compute the scale factor for a mesh to achieve a target wingspan.
+pub fn compute_wingspan_scale(mesh: &MeshData, target_wingspan: f64) -> f32 {
+    let mut min_y = f32::INFINITY;
+    let mut max_y = f32::NEG_INFINITY;
+    for v in &mesh.vertices {
+        min_y = min_y.min(v.position[1]);
+        max_y = max_y.max(v.position[1]);
+    }
+    let obj_span = (max_y - min_y).max(0.001);
+    target_wingspan as f32 / obj_span
 }
 
 // ── Convention enum ───────────────────────────────────────────────────

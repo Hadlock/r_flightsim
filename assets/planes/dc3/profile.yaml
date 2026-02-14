@@ -1,0 +1,47 @@
+# Aircraft Profile — Douglas DC-3
+name: "Douglas DC-3"
+manufacturer: "Douglas Aircraft Company"
+country: "United States"
+year: 1935
+description: "Revolutionary twin-engine propliner that transformed commercial aviation. Over 16,000 built including military C-47 variants."
+category: "Classic Airliner"
+
+model:
+  obj: "model.obj"
+
+physics:
+  mass: 8030.0
+  inertia: [30000.0, 55000.0, 75000.0]
+  wing_area: 91.7
+  wing_span: 29.0
+  max_thrust: 18000.0
+  cl0: 0.25
+  cl_alpha: 5.0
+  cd0: 0.028
+  cd_alpha_sq: 0.04
+  stall_alpha: 0.25
+
+engines:
+  - name: "Pratt & Whitney R-1830 Twin Wasp #1"
+    type: "radial-piston"
+    thrust: 9000.0
+  - name: "Pratt & Whitney R-1830 Twin Wasp #2"
+    type: "radial-piston"
+    thrust: 9000.0
+
+gear:
+  - name: "left_main"
+    position: [1.5, -2.5, 2.5]
+  - name: "right_main"
+    position: [1.5, 2.5, 2.5]
+  - name: "tail_wheel"
+    position: [-8.0, 0.0, 1.5]
+
+stats:
+  wing_area: "91.7 m²"
+  wing_span: "29.0 m"
+  max_thrust: "18,000 N"
+  mass: "8,030 kg"
+  max_speed: "346 km/h"
+  range: "2,400 km"
+  ceiling: "7,100 m"

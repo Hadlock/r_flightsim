@@ -1,0 +1,44 @@
+# Aircraft Profile — Piper PA-28 Warrior
+name: "Piper PA-28 Warrior"
+manufacturer: "Piper Aircraft"
+country: "United States"
+year: 1974
+description: "Low-wing single-engine piston trainer and touring aircraft, widely used for flight training worldwide."
+category: "General Aviation"
+
+model:
+  obj: "model.obj"
+
+physics:
+  mass: 1055.0
+  inertia: [1100.0, 1700.0, 2200.0]
+  wing_area: 15.8
+  wing_span: 10.7
+  max_thrust: 1500.0
+  cl0: 0.3
+  cl_alpha: 5.5
+  cd0: 0.028
+  cd_alpha_sq: 0.04
+  stall_alpha: 0.26
+
+engines:
+  - name: "Lycoming O-320-D3G"
+    type: "piston"
+    thrust: 1500.0
+
+gear:
+  - name: "nose_wheel"
+    position: [1.8, 0.0, 1.5]
+  - name: "left_main"
+    position: [-0.3, -1.5, 1.5]
+  - name: "right_main"
+    position: [-0.3, 1.5, 1.5]
+
+stats:
+  wing_area: "15.8 m²"
+  wing_span: "10.7 m"
+  max_thrust: "1,500 N"
+  mass: "1,055 kg"
+  max_speed: "237 km/h"
+  range: "1,061 km"
+  ceiling: "4,145 m"

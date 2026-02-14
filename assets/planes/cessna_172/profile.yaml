@@ -1,0 +1,44 @@
+# Aircraft Profile — Cessna 172 Skyhawk
+name: "Cessna 172 Skyhawk"
+manufacturer: "Cessna"
+country: "United States"
+year: 1956
+description: "The most produced aircraft in history, a high-wing single-engine piston trainer and utility aircraft."
+category: "General Aviation"
+
+model:
+  obj: "model.obj"
+
+physics:
+  mass: 1111.0
+  inertia: [1200.0, 1800.0, 2400.0]
+  wing_area: 16.2
+  wing_span: 11.0
+  max_thrust: 1600.0
+  cl0: 0.3
+  cl_alpha: 5.5
+  cd0: 0.028
+  cd_alpha_sq: 0.04
+  stall_alpha: 0.26
+
+engines:
+  - name: "Lycoming O-320"
+    type: "piston"
+    thrust: 1600.0
+
+gear:
+  - name: "nose_wheel"
+    position: [2.0, 0.0, 1.8]
+  - name: "left_main"
+    position: [-0.3, -1.5, 1.8]
+  - name: "right_main"
+    position: [-0.3, 1.5, 1.8]
+
+stats:
+  wing_area: "16.2 m²"
+  wing_span: "11.0 m"
+  max_thrust: "1,600 N"
+  mass: "1,111 kg"
+  max_speed: "226 km/h"
+  range: "1,289 km"
+  ceiling: "4,100 m"
