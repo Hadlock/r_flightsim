@@ -38,9 +38,9 @@ impl Camera {
         Mat4::perspective_rh(self.fov_deg.to_radians(), self.aspect, self.near, self.far)
     }
 
-    /// Scale near/far clip planes based on altitude for earth visibility.
+    /// Scale far clip plane based on altitude for earth visibility.
+    /// Near plane stays at 1.0 to avoid clipping the cockpit.
     pub fn update_clip_planes(&mut self, altitude_m: f64) {
-        self.near = crate::earth::dynamic_near_plane(altitude_m);
         self.far = crate::earth::dynamic_far_plane(altitude_m);
     }
 }
