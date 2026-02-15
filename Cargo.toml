@@ -24,4 +24,5 @@ ratatui = "0.29"
 crossterm = "0.28"
 ort = "2.0.0-rc.9"
 cpal = "0.15"
+ureq = "3"
 

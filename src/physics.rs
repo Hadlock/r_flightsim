@@ -586,7 +586,12 @@ const R_EARTH: f64 = 6_371_000.0;
 
 /// Create a RigidBody in orbit from orbital elements.
 /// Body frame is oriented prograde (X=velocity direction, Z=nadir).
-pub fn create_from_orbit(orbit: &crate::aircraft_profile::OrbitSpec) -> RigidBody {
+/// `jd` is the Julian Date used to rotate from ECI to ECEF via GMST,
+/// so that the starting position over Earth varies with the current time.
+pub fn create_from_orbit(orbit: &crate::aircraft_profile::OrbitSpec, jd: f64) -> RigidBody {
+    use crate::celestial::{eci_to_ecef, time::gmst_deg};
+    let gmst_rad = gmst_deg(jd).to_radians();
+
     let perigee_r = R_EARTH + orbit.altitude_km * 1000.0;
     let apogee_r = match orbit.apogee_km {
         Some(ap) => R_EARTH + ap * 1000.0,
@@ -627,17 +632,23 @@ pub fn create_from_orbit(orbit: &crate::aircraft_profile::OrbitSpec) -> RigidBod
     let qy = -sin_raan * sin_argpe + cos_raan * cos_argpe * cos_inc;
     let qz = cos_argpe * sin_inc;
 
-    // Position and velocity in ECI (treated as ECEF by the physics engine)
-    let pos_ecef = DVec3::new(
+    // Position and velocity in ECI
+    let pos_eci = DVec3::new(
         px * pos_pf.x + qx * pos_pf.y,
         py * pos_pf.x + qy * pos_pf.y,
         pz * pos_pf.x + qz * pos_pf.y,
     );
-    let vel_ecef = DVec3::new(
+    let vel_eci = DVec3::new(
         px * vel_pf.x + qx * vel_pf.y,
         py * vel_pf.x + qy * vel_pf.y,
         pz * vel_pf.x + qz * vel_pf.y,
     );
+
+    // Rotate from ECI to ECEF using GMST so starting position depends on current time
+    let pos_ecef = eci_to_ecef(pos_eci, gmst_rad);
+    // Velocity also needs rotation (Earth rotation correction is small, ~460 m/s at equator,
+    // but important for correct orbital mechanics)
+    let vel_ecef = eci_to_ecef(vel_eci, gmst_rad);
 
     // Body orientation: X=prograde, Z=nadir
     let body_fwd = vel_ecef.normalize();

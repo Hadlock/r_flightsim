@@ -15,6 +15,7 @@ mod renderer;
 mod scene;
 mod sim;
 mod telemetry;
+mod tle;
 mod tts;
 
 use camera::Camera;
@@ -115,6 +116,8 @@ struct App {
     shared_telemetry: telemetry::SharedTelemetry,
     dashboard_shutdown: Arc<AtomicBool>,
     dashboard_handle: Option<std::thread::JoinHandle<()>>,
+    /// Pre-parsed airport data (loaded once at menu init, reused across flights)
+    parsed_airports: Option<airport_gen::ParsedAirports>,
 }
 
 impl App {
@@ -133,6 +136,7 @@ impl App {
             shared_telemetry,
             dashboard_shutdown,
             dashboard_handle: Some(dashboard_handle),
+            parsed_airports: None,
         }
     }
 
@@ -186,6 +190,15 @@ impl App {
             menu,
             last_frame: Instant::now(),
         }));
+
+        // Pre-parse airport JSON while user browses the menu
+        if self.parsed_airports.is_none() {
+            let t = Instant::now();
+            let json = std::fs::read_to_string("assets/airports/airports_all.json")
+                .unwrap_or_default();
+            self.parsed_airports = Some(airport_gen::parse_airports_json(&json));
+            log::info!("[init_menu] pre-parsed airports: {:.0}ms", t.elapsed().as_millis());
+        }
     }
 
     fn init_flying(&mut self, aircraft_slug: &str) {
@@ -242,7 +255,16 @@ impl App {
         });
 
         // Extract orbit spec before consuming profile data
-        let orbit_spec = profile.as_ref().and_then(|p| p.orbit.clone());
+        let mut orbit_spec = profile.as_ref().and_then(|p| p.orbit.clone());
+
+        // Fetch live TLE for orbital vehicles with a NORAD ID
+        if let Some(orbit) = &mut orbit_spec {
+            if let Some(norad_id) = orbit.norad_id {
+                if orbit.lagrange_point.is_none() {
+                    tle::fetch_and_apply_tle(norad_id, orbit);
+                }
+            }
+        }
 
         let mut camera = Camera::new(gpu.config.width as f32 / gpu.config.height as f32);
         // Set initial camera pitch for orbital profiles (e.g., -90° = looking down at Earth)
@@ -254,41 +276,54 @@ impl App {
         }
 
         // Physics setup — orbit or ground start
+        let start_jd = celestial::time::unix_to_jd(
+            epoch_unix.unwrap_or_else(|| {
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs_f64()
+            }),
+        );
         let aircraft_body = match &orbit_spec {
             Some(orbit) if orbit.lagrange_point.is_some() => {
-                let jd = celestial::time::unix_to_jd(
-                    epoch_unix.unwrap_or_else(|| {
-                        std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap()
-                            .as_secs_f64()
-                    }),
-                );
-                physics::create_at_lagrange_point(orbit.altitude_km, jd)
+                physics::create_at_lagrange_point(orbit.altitude_km, start_jd)
             }
-            Some(orbit) => physics::create_from_orbit(orbit),
+            Some(orbit) => physics::create_from_orbit(orbit, start_jd),
             None => physics::create_aircraft_at_sfo(),
         };
         let simulation = physics::Simulation::new(params, aircraft_body);
         let sim_runner = sim::SimRunner::new(simulation);
 
         // Scene setup
+        let t0 = Instant::now();
         let mut objects = scene::load_scene(&gpu.device);
+        log::info!("[init] load_scene: {:.0}ms", t0.elapsed().as_millis());
 
-        // Airport generation
+        // Use pre-parsed airport data (loaded during menu init)
+        let parsed_airports = self.parsed_airports.take().unwrap_or_else(|| {
+            let json = std::fs::read_to_string("assets/airports/airports_all.json")
+                .unwrap_or_default();
+            airport_gen::parse_airports_json(&json)
+        });
+
+        // Airport generation (geometry for nearby airports)
+        let t2 = Instant::now();
         let next_id = objects.iter().map(|o| o.object_id).max().unwrap_or(0) + 1;
-        let airport_json = Path::new("assets/airports/airports_all.json");
         let ref_ecef = sim_runner.render_state().pos_ecef;
         let (airport_objects, next_id) =
-            airport_gen::generate_airports(&gpu.device, airport_json, next_id, ref_ecef);
+            airport_gen::generate_airports(&gpu.device, &parsed_airports, next_id, ref_ecef);
         objects.extend(airport_objects);
+        log::info!("[init] generate_airports: {:.0}ms", t2.elapsed().as_millis());
 
         // Earth mesh (WGS-84 ellipsoid)
+        let t3 = Instant::now();
         let (earth_renderer, earth_obj) = earth::EarthRenderer::new(&gpu.device);
         objects.push(earth_obj);
         let earth_idx = objects.len() - 1;
+        log::info!("[init] earth: {:.0}ms", t3.elapsed().as_millis());
 
         // Aircraft object
+        let t4 = Instant::now();
         let aircraft_obj = match obj_path {
             Some(path) => {
                 scene::load_aircraft_from_path(&gpu.device, &path, wingspan, next_id)
@@ -297,8 +332,10 @@ impl App {
         };
         objects.push(aircraft_obj);
         let aircraft_idx = objects.len() - 1;
+        log::info!("[init] aircraft: {:.0}ms", t4.elapsed().as_millis());
 
         // AI traffic planes
+        let t5 = Instant::now();
         let mut ai_traffic = ai_traffic::AiTrafficManager::new();
         let ki61_path = Path::new("assets/planes/ki61_hien/model.obj");
         let ai_base_id = next_id + 1;
@@ -314,10 +351,12 @@ impl App {
             objects.push(obj);
         }
         ai_traffic.set_scene_indices(ai_scene_indices);
+        log::info!("[init] ai_traffic ({}): {:.0}ms", ai_traffic.plane_count(), t5.elapsed().as_millis());
 
         let model_to_body = model_to_body_rotation();
 
         // Celestial engine (sun, moon, planets, stars)
+        let t6 = Instant::now();
         let celestial_engine = celestial::CelestialEngine::new(epoch_unix);
         let next_celestial_id = ai_base_id + ai_traffic.plane_count() as u32;
         let (celestial_objects, celestial_rel_indices) =
@@ -331,11 +370,13 @@ impl App {
             celestial_base + celestial_rel_indices[4],
         ];
         objects.extend(celestial_objects);
+        log::info!("[init] celestial: {:.0}ms", t6.elapsed().as_millis());
 
         // Airport proximity markers — only in orbital mode (too large for airplane flight)
+        let t7 = Instant::now();
         let next_marker_id = next_celestial_id + 5;
         let mut airport_markers = if orbit_spec.is_some() {
-            airport_markers::AirportMarkers::new(airport_json)
+            airport_markers::AirportMarkers::new(&parsed_airports.positions())
         } else {
             None
         };
@@ -345,10 +386,15 @@ impl App {
                 markers.create_scene_objects(&gpu.device, next_marker_id, marker_base_idx);
             objects.extend(marker_objects);
         }
+        log::info!("[init] markers: {:.0}ms", t7.elapsed().as_millis());
+
+        // Store parsed airports back for potential re-flights
+        self.parsed_airports = Some(parsed_airports);
 
         // ATC system
         let num_ai = ai_traffic.plane_count();
         let mut atc_manager = atc::AtcManager::new(num_ai);
+        log::info!("[init] TOTAL: {:.0}ms", t0.elapsed().as_millis());
         let atc_states: Vec<atc::types::AiPlaneAtcState> = (0..num_ai)
             .map(|i| atc::build_atc_state(i))
             .collect();
@@ -719,8 +765,7 @@ impl App {
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                // Solid overlay: sun + airport markers (bypasses Sobel edge detection,
-                // avoiding depth buffer precision artifacts at orbital distance).
+                // Solid overlay: sun + airport markers (depth-biased, bypasses Sobel)
                 let sun_idx = flying.celestial_indices[0];
                 let mut overlay_indices = vec![sun_idx];
                 for i in 0..1024 {
@@ -740,6 +785,7 @@ impl App {
                     proj,
                     flying.camera.position,
                     &overlay_indices,
+                    &[],
                 );
 
                 // Restore culled objects' index counts
@@ -1147,6 +1193,7 @@ impl ApplicationHandler for App {
                             proj,
                             glam::DVec3::ZERO,
                             &[],
+                            &[],
                         );
                     } else {
                         // Render empty scene (just FSBLUE background)
@@ -1158,6 +1205,7 @@ impl ApplicationHandler for App {
                             view,
                             proj,
                             glam::DVec3::ZERO,
+                            &[],
                             &[],
                         );
                     }

@@ -28,6 +28,7 @@ orbit:
   inclination_deg: 98.2
   raan_deg: 120.0
   camera_pitch_deg: -89.0
+  norad_id: 49260
 
 stats:
   altitude: "705 km"

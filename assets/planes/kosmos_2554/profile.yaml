@@ -31,6 +31,7 @@ orbit:
   arg_periapsis_deg: 270.0
   true_anomaly_deg: 0.0
   camera_pitch_deg: -89.0
+  norad_id: 47898
 
 stats:
   perigee: "500 km"

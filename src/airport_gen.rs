@@ -13,7 +13,6 @@
 use glam::{DVec3, Quat};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::path::Path;
 
 use crate::coords::{self, LLA};
 use crate::obj_loader::{MeshData, Vertex};
@@ -309,35 +308,60 @@ fn try_place_building(
 /// Max distance (metres) from reference position to generate airports.
 const LOAD_RADIUS_M: f64 = 200_000.0; // 200 km
 
-/// Load nearby airports from JSON and generate SceneObjects.
+/// Compact airport position extracted from parsed JSON — shared with airport_markers.
+pub struct AirportPosition {
+    pub lat_deg: f64,
+    pub lon_deg: f64,
+    pub elevation_ft: f64,
+}
+
+/// Parsed airport data — holds the result of the single JSON parse.
+pub struct ParsedAirports {
+    airports: Vec<AirportJson>,
+}
+
+/// Parse the airports JSON once. Returns parsed data for both generate_airports and markers.
+pub fn parse_airports_json(json_data: &str) -> ParsedAirports {
+    let airports: Vec<AirportJson> = match serde_json::from_str(json_data) {
+        Ok(a) => a,
+        Err(e) => {
+            log::warn!("Could not parse airports JSON: {}", e);
+            return ParsedAirports { airports: Vec::new() };
+        }
+    };
+    ParsedAirports { airports }
+}
+
+impl ParsedAirports {
+    /// Extract positions for airport_markers (no runways needed).
+    pub fn positions(&self) -> Vec<AirportPosition> {
+        self.airports
+            .iter()
+            .filter(|a| a.airport_type != "heliport" && a.airport_type != "closed")
+            .map(|a| AirportPosition {
+                lat_deg: a.latitude,
+                lon_deg: a.longitude,
+                elevation_ft: a.elevation_ft.unwrap_or(0.0),
+            })
+            .collect()
+    }
+}
+
+/// Load nearby airports from pre-parsed data and generate SceneObjects.
 /// Only airports within `LOAD_RADIUS_M` of `ref_ecef` are generated.
 /// `next_object_id` is the starting object_id; returns (objects, next_id_after).
 pub fn generate_airports(
     device: &wgpu::Device,
-    json_path: &Path,
+    parsed: &ParsedAirports,
     next_object_id: u32,
     ref_ecef: DVec3,
 ) -> (Vec<SceneObject>, u32) {
-    let data = match std::fs::read_to_string(json_path) {
-        Ok(d) => d,
-        Err(e) => {
-            log::warn!("Could not read airports JSON {}: {}", json_path.display(), e);
-            return (Vec::new(), next_object_id);
-        }
-    };
-
-    let airports: Vec<AirportJson> = match serde_json::from_str(&data) {
-        Ok(a) => a,
-        Err(e) => {
-            log::warn!("Could not parse airports JSON: {}", e);
-            return (Vec::new(), next_object_id);
-        }
-    };
+    let airports = &parsed.airports;
 
     let mut objects = Vec::new();
     let mut obj_id = next_object_id;
 
-    for airport in &airports {
+    for airport in airports {
         // Skip heliports and closed airports
         if airport.airport_type == "heliport" || airport.airport_type == "closed" {
             continue;
@@ -616,7 +640,7 @@ pub fn generate_airports(
     log::info!(
         "Generated {} airport scene objects from {}",
         objects.len(),
-        json_path.display()
+        "airports_all.json"
     );
     println!(
         "[airport_gen] Generated {} scene objects from {} airports",

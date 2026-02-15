@@ -29,6 +29,9 @@ pub struct Renderer {
     edge_pipeline: wgpu::RenderPipeline,
     edge_bind_group_layout: wgpu::BindGroupLayout,
 
+    // Geometry pipeline with depth bias (for objects near earth surface at orbital distance)
+    biased_geometry_pipeline: wgpu::RenderPipeline,
+
     // Solid overlay pass (sun — renders as filled white using its own shader)
     solid_overlay_pipeline: wgpu::RenderPipeline,
 
@@ -152,6 +155,61 @@ impl Renderer {
                     depth_compare: wgpu::CompareFunction::Less,
                     stencil: Default::default(),
                     bias: Default::default(),
+                }),
+                multisample: Default::default(),
+                multiview: None,
+                cache: None,
+            });
+
+        // Biased geometry pipeline — identical to geometry but with depth bias so objects
+        // at the earth surface (airport markers) don't z-fight at orbital distances.
+        let biased_geometry_pipeline =
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Biased Geometry Pipeline"),
+                layout: Some(&geometry_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &geometry_shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: vertex_stride,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &vertex_attrs,
+                    }],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &geometry_shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[
+                        Some(wgpu::ColorTargetState {
+                            format: wgpu::TextureFormat::Rgba16Float,
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::ALL,
+                        }),
+                        Some(wgpu::ColorTargetState {
+                            format: wgpu::TextureFormat::R32Uint,
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::ALL,
+                        }),
+                    ],
+                    compilation_options: Default::default(),
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: Some(wgpu::Face::Back),
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth32Float,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: Default::default(),
+                    bias: wgpu::DepthBiasState {
+                        constant: -1000,
+                        slope_scale: -2.0,
+                        clamp: 0.0,
+                    },
                 }),
                 multisample: Default::default(),
                 multiview: None,
@@ -333,6 +391,7 @@ impl Renderer {
             uniform_buffer,
             edge_pipeline,
             edge_bind_group_layout,
+            biased_geometry_pipeline,
             solid_overlay_pipeline,
             depth_texture: depth_view,
             normal_texture: normal_view,
@@ -463,6 +522,7 @@ impl Renderer {
         proj: Mat4,
         camera_pos: glam::DVec3,
         solid_overlay_indices: &[usize],
+        biased_geometry_indices: &[usize],
     ) {
         // Upload per-object uniforms into aligned slots BEFORE encoding any passes.
         for (i, obj) in objects.iter().enumerate() {
@@ -528,8 +588,9 @@ impl Renderer {
             pass.set_pipeline(&self.geometry_pipeline);
 
             for (i, obj) in objects.iter().enumerate() {
-                // Skip overlay-only objects in the geometry pass (they render in pass 3)
-                if solid_overlay_indices.contains(&i) {
+                // Skip overlay-only objects (they render in pass 3) and
+                // biased objects (rendered below with biased pipeline)
+                if solid_overlay_indices.contains(&i) || biased_geometry_indices.contains(&i) {
                     continue;
                 }
                 let dyn_offset = (i as u64 * UNIFORM_ALIGN) as u32;
@@ -537,6 +598,25 @@ impl Renderer {
                 pass.set_vertex_buffer(0, obj.vertex_buf.slice(..));
                 pass.set_index_buffer(obj.index_buf.slice(..), wgpu::IndexFormat::Uint32);
                 pass.draw_indexed(0..obj.index_count, 0, 0..1);
+            }
+
+            // Render depth-biased objects with the biased pipeline (same render pass)
+            if !biased_geometry_indices.is_empty() {
+                pass.set_pipeline(&self.biased_geometry_pipeline);
+                for &idx in biased_geometry_indices {
+                    if idx >= objects.len() {
+                        continue;
+                    }
+                    let obj = &objects[idx];
+                    if obj.index_count == 0 {
+                        continue;
+                    }
+                    let dyn_offset = (idx as u64 * UNIFORM_ALIGN) as u32;
+                    pass.set_bind_group(0, &self.geometry_bind_group, &[dyn_offset]);
+                    pass.set_vertex_buffer(0, obj.vertex_buf.slice(..));
+                    pass.set_index_buffer(obj.index_buf.slice(..), wgpu::IndexFormat::Uint32);
+                    pass.draw_indexed(0..obj.index_count, 0, 0..1);
+                }
             }
         }
 

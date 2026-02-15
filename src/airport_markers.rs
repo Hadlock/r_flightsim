@@ -6,6 +6,7 @@
 use glam::{DVec3, Quat};
 use std::path::Path;
 
+use crate::airport_gen::AirportPosition;
 use crate::coords::{self, LLA};
 use crate::obj_loader::{self, MeshData};
 use crate::scene::{self, SceneObject};
@@ -36,40 +37,18 @@ pub struct AirportMarkers {
 }
 
 impl AirportMarkers {
-    /// Load airport positions from JSON. Returns None if loading fails.
-    pub fn new(json_path: &Path) -> Option<Self> {
-        let data = match std::fs::read_to_string(json_path) {
-            Ok(d) => d,
-            Err(e) => {
-                log::warn!("Could not read airports JSON for markers: {}", e);
-                return None;
-            }
-        };
-
-        #[derive(serde::Deserialize)]
-        struct AirportJson {
-            #[serde(rename = "type", default)]
-            airport_type: String,
-            latitude: f64,
-            longitude: f64,
-            elevation_ft: Option<f64>,
+    /// Create from pre-parsed airport positions (avoids re-parsing the 43MB JSON).
+    pub fn new(positions: &[AirportPosition]) -> Option<Self> {
+        if positions.is_empty() {
+            return None;
         }
 
-        let airports_json: Vec<AirportJson> = match serde_json::from_str(&data) {
-            Ok(a) => a,
-            Err(e) => {
-                log::warn!("Could not parse airports JSON for markers: {}", e);
-                return None;
-            }
-        };
-
-        let airports: Vec<AirportPos> = airports_json
+        let airports: Vec<AirportPos> = positions
             .iter()
-            .filter(|a| a.airport_type != "heliport" && a.airport_type != "closed")
             .map(|a| {
-                let lat_rad = a.latitude.to_radians();
-                let lon_rad = a.longitude.to_radians();
-                let alt = a.elevation_ft.unwrap_or(0.0) * 0.3048;
+                let lat_rad = a.lat_deg.to_radians();
+                let lon_rad = a.lon_deg.to_radians();
+                let alt = a.elevation_ft * 0.3048;
                 let ecef = coords::lla_to_ecef(&LLA {
                     lat: lat_rad,
                     lon: lon_rad,

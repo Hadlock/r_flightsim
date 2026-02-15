@@ -24,14 +24,15 @@ engines: []
 gear: []
 
 orbit:
-  altitude_km: 408.0
+  altitude_km: 420.0
   inclination_deg: 51.6
   raan_deg: 0.0
   camera_pitch_deg: -89.0
+  norad_id: 25544
 
 stats:
-  altitude: "408 km"
+  altitude: "420 km"
   inclination: "51.6 deg"
-  speed: "7,668 m/s"
-  period: "92.5 min"
+  speed: "7,661 m/s"
+  period: "92.8 min"
   mass: "420,000 kg"

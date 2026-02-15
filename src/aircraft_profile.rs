@@ -90,6 +90,9 @@ pub struct OrbitSpec {
     /// Custom FOV in degrees (overrides default 115). Useful for telescope views.
     #[serde(default)]
     pub fov_deg: Option<f64>,
+    /// NORAD catalog ID for live TLE fetch (e.g. 25544 for ISS).
+    #[serde(default)]
+    pub norad_id: Option<u32>,
 }
 
 fn default_camera_pitch() -> f64 {
