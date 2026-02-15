@@ -20,7 +20,7 @@ mod tts;
 
 use camera::Camera;
 use clap::Parser;
-use glam::Quat;
+use glam::{DVec3, Quat};
 use renderer::Renderer;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -213,7 +213,7 @@ impl App {
             .find(|p| p.slug == aircraft_slug)
             .or_else(|| profiles.first());
 
-        let (params, aircraft_name, obj_path, wingspan) = match profile {
+        let (params, aircraft_name, obj_path, wingspan, pilot_eye) = match profile {
             Some(p) => (
                 p.to_aircraft_params(),
                 p.name.clone(),
@@ -223,6 +223,7 @@ impl App {
                     None
                 },
                 p.physics.wing_span,
+                p.pilot_eye_body(),
             ),
             None => {
                 // Fallback to hardcoded Ki-61
@@ -232,6 +233,7 @@ impl App {
                     "Ki-61 Hien".to_string(),
                     None,
                     12.0,
+                    DVec3::new(2.0, 0.0, -1.0),
                 )
             }
         };
@@ -292,7 +294,7 @@ impl App {
             None => physics::create_aircraft_at_sfo(),
         };
         let simulation = physics::Simulation::new(params, aircraft_body);
-        let sim_runner = sim::SimRunner::new(simulation);
+        let sim_runner = sim::SimRunner::new(simulation, pilot_eye);
 
         // Scene setup
         let t0 = Instant::now();

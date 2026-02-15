@@ -13,6 +13,8 @@ pub struct AircraftProfile {
     pub description: String,
     pub category: String,
     pub model: ModelSpec,
+    #[serde(default)]
+    pub cockpit: CockpitSpec,
     pub physics: PhysicsSpec,
     pub engines: Vec<EngineSpec>,
     #[serde(default)]
@@ -31,6 +33,27 @@ pub struct AircraftProfile {
 #[derive(Deserialize, Debug, Clone)]
 pub struct ModelSpec {
     pub obj: String,
+}
+
+/// Cockpit / pilot eye placement in body frame (X=forward, Y=right, Z=down).
+#[derive(Deserialize, Debug, Clone)]
+pub struct CockpitSpec {
+    /// Pilot eye offset from CG in body frame [X, Y, Z] meters.
+    /// Default: 2m forward, centered, 1m above centerline.
+    #[serde(default = "default_eye_position")]
+    pub eye_position: [f64; 3],
+}
+
+impl Default for CockpitSpec {
+    fn default() -> Self {
+        Self {
+            eye_position: default_eye_position(),
+        }
+    }
+}
+
+fn default_eye_position() -> [f64; 3] {
+    [2.0, 0.0, -1.0]
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -108,6 +131,12 @@ impl AircraftProfile {
     /// Check if the OBJ model file exists
     pub fn has_model(&self) -> bool {
         self.obj_path().exists()
+    }
+
+    /// Pilot eye offset in body frame as DVec3
+    pub fn pilot_eye_body(&self) -> DVec3 {
+        let e = &self.cockpit.eye_position;
+        DVec3::new(e[0], e[1], e[2])
     }
 
     /// Convert profile to runtime physics parameters

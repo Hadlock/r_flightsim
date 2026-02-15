@@ -5,10 +5,6 @@ use winit::keyboard::KeyCode;
 
 use crate::physics::{Simulation, PHYSICS_DT};
 
-/// Pilot eye offset in body frame (X=forward, Y=right, Z=down).
-/// Roughly at cockpit position: 2m behind nose tip, 1m above centerline.
-const PILOT_EYE_BODY: DVec3 = DVec3::new(2.0, 0.0, -1.0);
-
 /// Throttle change rate per second when key is held
 const THROTTLE_RATE: f64 = 0.5;
 
@@ -44,10 +40,11 @@ pub struct SimRunner {
     prev_state: InterpolationState,
     curr_state: InterpolationState,
     held_keys: HashSet<KeyCode>,
+    pilot_eye_body: DVec3,
 }
 
 impl SimRunner {
-    pub fn new(sim: Simulation) -> Self {
+    pub fn new(sim: Simulation, pilot_eye_body: DVec3) -> Self {
         let state = InterpolationState::from_sim(&sim);
         Self {
             sim,
@@ -55,6 +52,7 @@ impl SimRunner {
             prev_state: state.clone(),
             curr_state: state,
             held_keys: HashSet::new(),
+            pilot_eye_body,
         }
     }
 
@@ -94,7 +92,7 @@ impl SimRunner {
 
     /// Camera ECEF position (pilot eye in world space).
     pub fn camera_position(&self, render_state: &InterpolationState) -> DVec3 {
-        render_state.pos_ecef + render_state.orientation * PILOT_EYE_BODY
+        render_state.pos_ecef + render_state.orientation * self.pilot_eye_body
     }
 
     fn update_controls(&mut self, dt: f64) {
