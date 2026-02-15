@@ -79,7 +79,6 @@ pub const PLANETS: [PlanetElements; 8] = [
     },
 ];
 
-const AU_TO_M: f64 = 149_597_870_700.0;
 
 /// Solve Kepler's equation M = E - e*sin(E) for E.
 fn solve_kepler(m_rad: f64, e: f64) -> f64 {
@@ -128,7 +127,7 @@ fn heliocentric_position(el: &PlanetElements, t: f64) -> DVec3 {
     let y = r * (sin_omega * cos_v_w + cos_omega * sin_v_w * cos_i);
     let z = r * (sin_v_w * sin_i);
 
-    DVec3::new(x * AU_TO_M, y * AU_TO_M, z * AU_TO_M)
+    DVec3::new(x * crate::constants::AU_TO_M, y * crate::constants::AU_TO_M, z * crate::constants::AU_TO_M)
 }
 
 /// Compute geocentric ECI positions for the 7 non-Earth planets.

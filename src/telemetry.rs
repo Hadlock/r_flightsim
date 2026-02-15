@@ -17,12 +17,7 @@ use ratatui::{
     Terminal,
 };
 
-#[derive(Clone)]
-pub struct RadioLogEntry {
-    pub frequency: f32,
-    pub speaker: String,
-    pub text: String,
-}
+pub use crate::atc::types::RadioLogEntry;
 
 #[derive(Clone)]
 pub struct Telemetry {

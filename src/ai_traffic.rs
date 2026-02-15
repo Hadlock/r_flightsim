@@ -266,12 +266,12 @@ impl AiPlane {
 
     /// Altitude in feet MSL.
     pub fn altitude_ft(&self) -> f64 {
-        self.altitude_m * 3.28084
+        self.altitude_m * crate::constants::M_TO_FT
     }
 
     /// Speed in knots.
     pub fn speed_kts(&self) -> f64 {
-        self.speed_mps * 1.94384
+        self.speed_mps * crate::constants::MPS_TO_KTS
     }
 
     /// Heading in degrees (0=north, CW positive).
@@ -325,7 +325,7 @@ impl AiTrafficManager {
                 i,
                 p.altitude_m,
                 p.speed_mps,
-                p.speed_mps * 1.94384,
+                p.speed_mps * crate::constants::MPS_TO_KTS,
                 p.current_wp,
                 if p.loiter_clockwise { "CW" } else { "CCW" },
             );

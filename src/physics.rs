@@ -196,6 +196,55 @@ impl RigidBody {
     }
 }
 
+// --- Flight instrument derivations ---
+
+pub struct FlightInstruments {
+    pub heading_deg: f64,
+    pub pitch_deg: f64,
+    pub bank_deg: f64,
+    pub airspeed_kts: f64,
+    pub groundspeed_kts: f64,
+    pub vertical_speed_fpm: f64,
+    pub altitude_msl_ft: f64,
+    pub altitude_agl_ft: f64,
+    pub alpha_deg: f64,
+    pub latitude_deg: f64,
+    pub longitude_deg: f64,
+    pub on_ground: bool,
+}
+
+impl FlightInstruments {
+    pub fn from_aircraft(aircraft: &RigidBody) -> Self {
+        let nose_ecef = aircraft.orientation * DVec3::X;
+        let nose_enu = aircraft.enu_frame.ecef_to_enu(nose_ecef);
+        let hdg = nose_enu.x.atan2(nose_enu.y).to_degrees();
+
+        let right_ecef = aircraft.orientation * DVec3::Y;
+        let right_enu = aircraft.enu_frame.ecef_to_enu(right_ecef);
+
+        let vel_body = aircraft.orientation.conjugate() * aircraft.vel_ecef;
+
+        Self {
+            heading_deg: if hdg < 0.0 { hdg + 360.0 } else { hdg },
+            pitch_deg: nose_enu.z.asin().to_degrees(),
+            bank_deg: right_enu.z.asin().to_degrees(),
+            airspeed_kts: vel_body.length() * crate::constants::MPS_TO_KTS,
+            groundspeed_kts: aircraft.groundspeed * crate::constants::MPS_TO_KTS,
+            vertical_speed_fpm: aircraft.vertical_speed * crate::constants::MPS_TO_FPM,
+            altitude_msl_ft: aircraft.lla.alt * crate::constants::M_TO_FT,
+            altitude_agl_ft: aircraft.agl * crate::constants::M_TO_FT,
+            alpha_deg: if vel_body.x.abs() > 0.1 {
+                vel_body.z.atan2(vel_body.x).to_degrees()
+            } else {
+                0.0
+            },
+            latitude_deg: aircraft.lla.lat.to_degrees(),
+            longitude_deg: aircraft.lla.lon.to_degrees(),
+            on_ground: aircraft.on_ground,
+        }
+    }
+}
+
 // --- RK4 integration types ---
 
 struct OdeState {
@@ -579,8 +628,7 @@ pub fn create_aircraft_at_sfo() -> RigidBody {
     body
 }
 
-/// Earth gravitational parameter (m³/s²)
-const GM_EARTH: f64 = 3.986_004_418e14;
+use crate::constants;
 /// Mean Earth radius (m)
 const R_EARTH: f64 = 6_371_000.0;
 
@@ -612,7 +660,7 @@ pub fn create_from_orbit(orbit: &crate::aircraft_profile::OrbitSpec, jd: f64) ->
     // Position and velocity in perifocal frame (P toward periapsis, Q 90° ahead)
     let pos_pf = DVec3::new(r * nu.cos(), r * nu.sin(), 0.0);
     let p = a * (1.0 - e * e); // semi-latus rectum
-    let mu_over_p = (GM_EARTH / p).sqrt();
+    let mu_over_p = (constants::GM_EARTH / p).sqrt();
     let vel_pf = DVec3::new(-mu_over_p * nu.sin(), mu_over_p * (e + nu.cos()), 0.0);
 
     // Rotation from perifocal to ECI (using RAAN, inclination, argument of periapsis)

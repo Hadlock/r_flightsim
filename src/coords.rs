@@ -95,6 +95,22 @@ pub fn enu_frame_at(lat_rad: f64, lon_rad: f64, origin_ecef: DVec3) -> ENUFrame 
     }
 }
 
+/// ENU-to-ECEF rotation quaternion at a given geodetic position.
+/// Returns f32 Quat suitable for SceneObject rotation.
+pub fn enu_to_ecef_quat(lat_rad: f64, lon_rad: f64) -> glam::Quat {
+    let enu = enu_frame_at(lat_rad, lon_rad, DVec3::ZERO);
+    let mat = glam::DMat3::from_cols(enu.east, enu.north, enu.up);
+    let dq = glam::DQuat::from_mat3(&mat);
+    glam::Quat::from_xyzw(dq.x as f32, dq.y as f32, dq.z as f32, dq.w as f32)
+}
+
+/// ENU-to-ECEF rotation as f64 DQuat (for physics/AI traffic).
+pub fn enu_to_ecef_dquat(lat_rad: f64, lon_rad: f64) -> glam::DQuat {
+    let enu = enu_frame_at(lat_rad, lon_rad, DVec3::ZERO);
+    let mat = glam::DMat3::from_cols(enu.east, enu.north, enu.up);
+    glam::DQuat::from_mat3(&mat)
+}
+
 impl ENUFrame {
     /// Convert a vector from ENU to ECEF (rotation only, no translation)
     pub fn enu_to_ecef(&self, enu: DVec3) -> DVec3 {

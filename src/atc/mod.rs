@@ -4,6 +4,7 @@
 /// operating around SF Bay Area airports. The player eavesdrops on radio traffic.
 
 pub mod facilities;
+pub mod overlay;
 pub mod phraseology;
 pub mod types;
 

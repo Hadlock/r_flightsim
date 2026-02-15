@@ -48,7 +48,7 @@ impl AirportMarkers {
             .map(|a| {
                 let lat_rad = a.lat_deg.to_radians();
                 let lon_rad = a.lon_deg.to_radians();
-                let alt = a.elevation_ft * 0.3048;
+                let alt = a.elevation_ft * crate::constants::FT_TO_M;
                 let ecef = coords::lla_to_ecef(&LLA {
                     lat: lat_rad,
                     lon: lon_rad,
@@ -146,7 +146,7 @@ impl AirportMarkers {
             let ap = &self.airports[airport_idx];
             let up = ap.ecef.normalize();
             objects[scene_idx].world_pos = ap.ecef + up * 2_000.0;
-            objects[scene_idx].rotation = enu_to_ecef_quat(ap.lat_rad, ap.lon_rad);
+            objects[scene_idx].rotation = coords::enu_to_ecef_quat(ap.lat_rad, ap.lon_rad);
             objects[scene_idx].index_count =
                 self.pyramid_mesh.indices.len() as u32;
         }
@@ -159,10 +159,3 @@ impl AirportMarkers {
     }
 }
 
-/// ENU-to-ECEF rotation quaternion at a given lat/lon.
-fn enu_to_ecef_quat(lat_rad: f64, lon_rad: f64) -> Quat {
-    let enu = coords::enu_frame_at(lat_rad, lon_rad, DVec3::ZERO);
-    let mat = glam::DMat3::from_cols(enu.east, enu.north, enu.up);
-    let dq = glam::DQuat::from_mat3(&mat);
-    Quat::from_xyzw(dq.x as f32, dq.y as f32, dq.z as f32, dq.w as f32)
-}

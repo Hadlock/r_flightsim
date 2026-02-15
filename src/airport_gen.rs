@@ -68,7 +68,7 @@ impl RunwayJson {
 
 // ── Geometry helpers ─────────────────────────────────────────────────────────
 
-const FT_TO_M: f64 = 0.3048;
+use crate::constants;
 
 /// Create a box mesh centred at the origin. Width along X, depth along Y, height along Z-up.
 /// Vertices are in a local ENU-like frame (X=east, Y=north, Z=up).
@@ -373,7 +373,7 @@ pub fn generate_airports(
         };
 
         // Quick distance check (spherical approximation) — skip far airports
-        let elev_m_quick = airport.elevation_ft.unwrap_or(0.0) * FT_TO_M;
+        let elev_m_quick = airport.elevation_ft.unwrap_or(0.0) * constants::FT_TO_M;
         let apt_ecef_quick = coords::lla_to_ecef(&LLA {
             lat: airport.latitude.to_radians(),
             lon: airport.longitude.to_radians(),
@@ -398,7 +398,7 @@ pub fn generate_airports(
             continue;
         }
 
-        let elev_m = airport.elevation_ft.unwrap_or(0.0) * FT_TO_M;
+        let elev_m = airport.elevation_ft.unwrap_or(0.0) * constants::FT_TO_M;
         let apt_lla = LLA {
             lat: airport.latitude.to_radians(),
             lon: airport.longitude.to_radians(),
@@ -494,8 +494,8 @@ pub fn generate_airports(
         // Create each runway as a separate SceneObject with its own ECEF position
         for ri in &rwy_infos {
             let rwy = &valid_runways[ri.idx];
-            let length_m = rwy.length_ft.unwrap_or(0.0) * FT_TO_M;
-            let width_m = rwy.width_ft.unwrap_or(0.0) * FT_TO_M;
+            let length_m = rwy.length_ft.unwrap_or(0.0) * constants::FT_TO_M;
+            let width_m = rwy.width_ft.unwrap_or(0.0) * constants::FT_TO_M;
             let heading_deg = rwy.heading_deg().unwrap_or(0.0);
             let angle_rad = (90.0 - heading_deg).to_radians();
 
@@ -554,7 +554,7 @@ pub fn generate_airports(
         // Pick a side for the building cluster (+1 or -1)
         let side_sign = if h % 2 == 0 { 1.0 } else { -1.0 };
 
-        let longest_len_m = longest_rwy.length_ft.unwrap_or(3000.0) * FT_TO_M;
+        let longest_len_m = longest_rwy.length_ft.unwrap_or(3000.0) * constants::FT_TO_M;
         let max_lateral = (longest_len_m * 0.3).max(200.0).min(800.0);
         let max_along = longest_len_m * 0.4;
 

@@ -32,7 +32,7 @@ pub fn sun_position(jd: f64) -> SunResult {
     let e = 0.016_708_634 - 0.000_042_037 * t;
     let v = m_rad + c.to_radians();
     let r_au = 1.000_001_018 * (1.0 - e * e) / (1.0 + e * v.cos());
-    let r_m = r_au * 149_597_870_700.0;
+    let r_m = r_au * crate::constants::AU_TO_M;
 
     // Convert to equatorial J2000
     let obliquity = obliquity_deg(jd_to_t(jd)).to_radians();

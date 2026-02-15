@@ -254,21 +254,11 @@ fn parse_decimal(s: &str) -> Option<LLA> {
     })
 }
 
-// ── ENU→ECEF rotation ─────────────────────────────────────────────────
-
-/// Compute the quaternion that rotates local ENU coordinates to ECEF at the given lat/lon.
-fn enu_to_ecef_quat(lat_rad: f64, lon_rad: f64) -> Quat {
-    let enu = coords::enu_frame_at(lat_rad, lon_rad, DVec3::ZERO);
-    let mat = glam::DMat3::from_cols(enu.east, enu.north, enu.up);
-    let dq = glam::DQuat::from_mat3(&mat);
-    Quat::from_xyzw(dq.x as f32, dq.y as f32, dq.z as f32, dq.w as f32)
-}
-
 // ── Rotation helpers ─────────────────────────────────────────────────
 
 /// Compute the rotation for an object based on its position and OBJ convention.
 fn object_rotation(lla: &LLA, convention: &ObjConvention) -> Quat {
-    let enu_quat = enu_to_ecef_quat(lla.lat, lla.lon);
+    let enu_quat = coords::enu_to_ecef_quat(lla.lat, lla.lon);
     match convention {
         ObjConvention::Enu => enu_quat,
         ObjConvention::Yup => {
