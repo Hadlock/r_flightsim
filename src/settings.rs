@@ -29,9 +29,9 @@ pub struct Settings {
 impl Settings {
     pub fn new() -> Self {
         Self {
-            music_volume: SharedVolume::new(0.22),
-            atc_voice_volume: SharedVolume::new(0.40),
-            engine_volume: SharedVolume::new(0.33),
+            music_volume: SharedVolume::new(0.15),
+            atc_voice_volume: SharedVolume::new(0.38),
+            engine_volume: SharedVolume::new(0.35),
             fetch_orbital_params: false,
         }
     }

@@ -174,7 +174,10 @@ impl EngineSoundPlayer {
         })
     }
 
-    pub fn tick(&self) {
+    /// Update volume and pitch. `throttle` is 0.0–1.0.
+    pub fn tick(&self, throttle: f32) {
         self.sink.set_volume(self.volume.get());
+        let speed = 0.35 + throttle * 1.1;
+        self.sink.set_speed(speed);
     }
 }

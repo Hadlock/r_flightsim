@@ -559,9 +559,10 @@ impl FlyingState {
 
                 output.present();
 
-                // Update engine sound volume
+                // Update engine sound volume + pitch
                 if let Some(ref engine) = self.engine_sound {
-                    engine.tick();
+                    let throttle = self.sim_runner.sim.controls.throttle as f32;
+                    engine.tick(throttle);
                 }
 
                 // Frame pacing

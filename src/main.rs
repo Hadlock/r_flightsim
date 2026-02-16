@@ -274,9 +274,6 @@ impl App {
     }
 
     fn init_flying(&mut self, aircraft_slug: &str) {
-        // Stop music
-        self.music_player = None;
-
         let profiles = self.ensure_profiles().to_vec();
         let gpu = self.gpu.as_ref().expect("GPU not initialized");
 
@@ -331,12 +328,6 @@ impl App {
                 .set_cursor_grab(winit::window::CursorGrabMode::None);
             gpu.window.set_cursor_visible(true);
         }
-
-        // Resume music
-        self.music_player = audio::MusicPlayer::new(
-            Path::new("assets/music"),
-            self.settings.music_volume.clone(),
-        );
 
         let profiles = self.ensure_profiles().to_vec();
         let gpu = self.gpu.as_ref().expect("GPU not initialized");
@@ -752,6 +743,9 @@ impl ApplicationHandler for App {
                         }
                     }
                     FlyingAction::UpdateTelemetry => {
+                        if let Some(ref mut player) = self.music_player {
+                            player.tick();
+                        }
                         let mut t = self.shared_telemetry.lock().unwrap();
                         let s = flying.telemetry_snapshot();
                         // Preserve app_state, aircraft_name, fps — update flight data
