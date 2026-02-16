@@ -5,6 +5,7 @@ country: "United States"
 year: 1935
 description: "Revolutionary twin-engine propliner that transformed commercial aviation. Over 16,000 built including military C-47 variants."
 category: "Classic Airliner"
+engine_sound: propeller-large
 
 model:
   obj: "model.obj"

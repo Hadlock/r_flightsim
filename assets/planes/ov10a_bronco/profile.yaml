@@ -5,6 +5,7 @@ country: "United States"
 year: 1967
 description: "Twin-turboprop light attack and observation aircraft with twin-boom fuselage, designed for forward air control and COIN operations."
 category: "Light Attack / Observation"
+engine_sound: propeller-small
 
 model:
   obj: "model.obj"

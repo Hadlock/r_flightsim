@@ -3,6 +3,7 @@ mod aircraft_profile;
 mod airport_gen;
 mod airport_markers;
 mod atc;
+mod audio;
 mod camera;
 mod celestial;
 mod cli;
@@ -11,6 +12,7 @@ mod coords;
 mod earth;
 mod flying;
 mod menu;
+mod settings;
 mod obj_loader;
 mod physics;
 mod renderer;
@@ -172,6 +174,8 @@ struct App {
     parsed_airports: Option<airport_gen::ParsedAirports>,
     /// Aircraft profiles (loaded once, reused across menu/flying transitions)
     cached_profiles: Option<Vec<aircraft_profile::AircraftProfile>>,
+    settings: settings::Settings,
+    music_player: Option<audio::MusicPlayer>,
 }
 
 impl App {
@@ -183,6 +187,12 @@ impl App {
             dashboard_shutdown.clone(),
         );
 
+        let settings = settings::Settings::new();
+        let music_player = audio::MusicPlayer::new(
+            Path::new("assets/music"),
+            settings.music_volume.clone(),
+        );
+
         Self {
             gpu: None,
             game_state: None,
@@ -192,6 +202,8 @@ impl App {
             dashboard_handle: Some(dashboard_handle),
             parsed_airports: None,
             cached_profiles: None,
+            settings,
+            music_player,
         }
     }
 
@@ -205,6 +217,14 @@ impl App {
     }
 
     fn init_menu(&mut self) {
+        // Ensure music is playing
+        if self.music_player.is_none() {
+            self.music_player = audio::MusicPlayer::new(
+                Path::new("assets/music"),
+                self.settings.music_volume.clone(),
+            );
+        }
+
         let profiles = self.ensure_profiles().to_vec();
         let gpu = self.gpu.as_ref().expect("GPU not initialized");
 
@@ -218,7 +238,16 @@ impl App {
         let egui = EguiContext::new(gpu);
         menu::configure_style(&egui.ctx);
 
-        let mut menu = menu::MenuState::new(profiles);
+        let music_pct = (self.settings.music_volume.get() * 100.0).round() as u32;
+        let atc_pct = (self.settings.atc_voice_volume.get() * 100.0).round() as u32;
+        let engine_pct = (self.settings.engine_volume.get() * 100.0).round() as u32;
+        let mut menu = menu::MenuState::new(
+            profiles,
+            music_pct,
+            atc_pct,
+            engine_pct,
+            self.settings.fetch_orbital_params,
+        );
         menu.request_preview_load();
 
         // Update telemetry to show menu state
@@ -245,6 +274,9 @@ impl App {
     }
 
     fn init_flying(&mut self, aircraft_slug: &str) {
+        // Stop music
+        self.music_player = None;
+
         let profiles = self.ensure_profiles().to_vec();
         let gpu = self.gpu.as_ref().expect("GPU not initialized");
 
@@ -263,12 +295,21 @@ impl App {
             }
         });
 
+        let atc_volume = if self.args.no_tts {
+            None
+        } else {
+            Some(self.settings.atc_voice_volume.clone())
+        };
+
         let flying = FlyingState::new(
             gpu,
             profile,
             &mut self.parsed_airports,
             epoch_unix,
             self.args.no_tts,
+            atc_volume,
+            self.settings.engine_volume.clone(),
+            self.settings.fetch_orbital_params,
         );
 
         // Update telemetry
@@ -291,6 +332,12 @@ impl App {
             gpu.window.set_cursor_visible(true);
         }
 
+        // Resume music
+        self.music_player = audio::MusicPlayer::new(
+            Path::new("assets/music"),
+            self.settings.music_volume.clone(),
+        );
+
         let profiles = self.ensure_profiles().to_vec();
         let gpu = self.gpu.as_ref().expect("GPU not initialized");
 
@@ -304,7 +351,16 @@ impl App {
         let egui = EguiContext::new(gpu);
         menu::configure_style(&egui.ctx);
 
-        let mut menu = menu::MenuState::new(profiles);
+        let music_pct = (self.settings.music_volume.get() * 100.0).round() as u32;
+        let atc_pct = (self.settings.atc_voice_volume.get() * 100.0).round() as u32;
+        let engine_pct = (self.settings.engine_volume.get() * 100.0).round() as u32;
+        let mut menu = menu::MenuState::new(
+            profiles,
+            music_pct,
+            atc_pct,
+            engine_pct,
+            self.settings.fetch_orbital_params,
+        );
         if let Some(idx) = previous_selection {
             menu.selected_index = idx;
         }
@@ -542,6 +598,15 @@ impl ApplicationHandler for App {
 
                     // Update preview rotation/pitch/zoom
                     menu_state.menu.update_preview(dt);
+
+                    // Advance music and sync settings sliders to SharedVolume
+                    if let Some(ref mut player) = self.music_player {
+                        player.tick();
+                    }
+                    self.settings.music_volume.set(menu_state.menu.settings_music_pct as f32 / 100.0);
+                    self.settings.atc_voice_volume.set(menu_state.menu.settings_atc_pct as f32 / 100.0);
+                    self.settings.engine_volume.set(menu_state.menu.settings_engine_pct as f32 / 100.0);
+                    self.settings.fetch_orbital_params = menu_state.menu.settings_fetch_orbital;
 
                     // Check for pending model loads
                     menu_state

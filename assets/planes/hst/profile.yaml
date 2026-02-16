@@ -4,6 +4,7 @@ country: "United States"
 year: 1990
 description: "Hubble Space Telescope. 540 km LEO orbit at 28.5 deg inclination. Orbital camera looking down at Earth."
 category: "Spacecraft"
+engine_sound: space
 
 model:
   obj: "../../obj_static/pyramid_giza.obj"

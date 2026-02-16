@@ -5,6 +5,7 @@ country: "European Union"
 year: 2016
 description: "Narrow-body single-aisle airliner with new engine option, the backbone of short-to-medium-haul aviation worldwide."
 category: "Narrow-Body Airliner"
+engine_sound: jet-large
 
 model:
   obj: "model.obj"

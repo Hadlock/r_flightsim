@@ -5,6 +5,7 @@ country: "Japan"
 year: 1942
 description: "Imperial Japanese Army single-seat fighter, powered by a liquid-cooled Ha-40 inline engine."
 category: "WWII Fighter"
+engine_sound: propeller-small
 
 model:
   obj: "model.obj"

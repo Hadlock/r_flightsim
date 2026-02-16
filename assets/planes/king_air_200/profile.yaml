@@ -5,6 +5,7 @@ country: "United States"
 year: 1974
 description: "Twin-turboprop pressurized business and utility aircraft, one of the most popular turboprops ever built."
 category: "Business Turboprop"
+engine_sound: propeller-small
 
 model:
   obj: "model.obj"

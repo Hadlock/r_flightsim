@@ -5,6 +5,7 @@ country: "United States"
 year: 1974
 description: "Low-wing single-engine piston trainer and touring aircraft, widely used for flight training worldwide."
 category: "General Aviation"
+engine_sound: propeller-small
 
 model:
   obj: "model.obj"

@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
+use crate::audio;
 use crate::physics::{AircraftParams, GearContact};
 use glam::DVec3;
 
@@ -20,6 +21,8 @@ pub struct AircraftProfile {
     #[serde(default)]
     pub gear: Vec<GearSpec>,
     pub stats: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub engine_sound: Option<audio::EngineSoundCategory>,
     /// Optional orbital parameters — if present, starts in orbit instead of SFO
     pub orbit: Option<OrbitSpec>,
 

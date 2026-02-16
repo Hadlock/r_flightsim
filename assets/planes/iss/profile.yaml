@@ -4,6 +4,7 @@ country: "International"
 year: 1998
 description: "International Space Station. 408 km LEO orbit at 51.6 deg inclination. Orbital camera looking down at Earth."
 category: "Spacecraft"
+engine_sound: space
 
 model:
   obj: "../../obj_static/pyramid_giza.obj"

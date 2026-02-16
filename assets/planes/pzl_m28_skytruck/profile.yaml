@@ -5,6 +5,7 @@ country: "Poland"
 year: 1984
 description: "STOL utility transport aircraft derived from the Antonov An-28, powered by twin PT6A turboprops."
 category: "Utility Transport"
+engine_sound: propeller-large
 
 model:
   obj: "model.obj"

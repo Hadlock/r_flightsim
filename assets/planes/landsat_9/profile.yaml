@@ -4,6 +4,7 @@ country: "United States"
 year: 2021
 description: "Landsat 9 Earth-observing satellite. 705 km sun-synchronous orbit at 98.2 deg inclination (retrograde)."
 category: "Spacecraft"
+engine_sound: space
 
 model:
   obj: "../../obj_static/pyramid_giza.obj"

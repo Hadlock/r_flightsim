@@ -5,8 +5,10 @@ use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::Fullscreen;
 
+use crate::audio;
 use crate::camera::Camera;
 use crate::renderer::Renderer;
+use crate::settings::SharedVolume;
 use crate::{
     ai_traffic, aircraft_profile, airport_gen, airport_markers, atc, celestial,
     earth, physics, scene, sim, telemetry, tle, tts,
@@ -34,6 +36,7 @@ pub struct FlyingState {
     pub celestial_indices: [usize; 5],
     pub airport_markers: Option<airport_markers::AirportMarkers>,
     pub marker_base_idx: usize,
+    pub engine_sound: Option<audio::EngineSoundPlayer>,
 }
 
 pub enum FlyingAction {
@@ -51,6 +54,9 @@ impl FlyingState {
         parsed_airports: &mut Option<airport_gen::ParsedAirports>,
         epoch_unix: Option<f64>,
         no_tts: bool,
+        atc_volume: Option<SharedVolume>,
+        engine_volume: SharedVolume,
+        fetch_orbital_params: bool,
     ) -> Self {
         let (params, aircraft_name, obj_path, wingspan, pilot_eye) = match profile {
             Some(p) => (
@@ -86,11 +92,13 @@ impl FlyingState {
         // Extract orbit spec
         let mut orbit_spec = profile.and_then(|p| p.orbit.clone());
 
-        // Fetch live TLE for orbital vehicles with a NORAD ID
-        if let Some(orbit) = &mut orbit_spec {
-            if let Some(norad_id) = orbit.norad_id {
-                if orbit.lagrange_point.is_none() {
-                    tle::fetch_and_apply_tle(norad_id, orbit);
+        // Fetch live TLE for orbital vehicles with a NORAD ID (if enabled)
+        if fetch_orbital_params {
+            if let Some(orbit) = &mut orbit_spec {
+                if let Some(norad_id) = orbit.norad_id {
+                    if orbit.lagrange_point.is_none() {
+                        tle::fetch_and_apply_tle(norad_id, orbit);
+                    }
                 }
             }
         }
@@ -233,7 +241,7 @@ impl FlyingState {
 
         // TTS engine
         let tts_engine = if !no_tts {
-            match tts::TtsEngine::new() {
+            match tts::TtsEngine::new(atc_volume) {
                 Ok(engine) => {
                     atc_manager.set_tts_sender(engine.tts_sender());
                     log::info!("TTS engine initialized");
@@ -269,6 +277,11 @@ impl FlyingState {
             });
         gpu.window.set_cursor_visible(false);
 
+        // Engine sound
+        let engine_sound = profile
+            .and_then(|p| p.engine_sound.as_ref())
+            .and_then(|cat| audio::EngineSoundPlayer::new(cat, engine_volume));
+
         log::info!(
             "Flying: {} ({} objects loaded)",
             aircraft_name,
@@ -296,6 +309,7 @@ impl FlyingState {
             celestial_indices,
             airport_markers,
             marker_base_idx,
+            engine_sound,
         }
     }
 
@@ -544,6 +558,11 @@ impl FlyingState {
                 });
 
                 output.present();
+
+                // Update engine sound volume
+                if let Some(ref engine) = self.engine_sound {
+                    engine.tick();
+                }
 
                 // Frame pacing
                 if let Some(remaining) = TARGET_FRAME_TIME.checked_sub(now.elapsed()) {

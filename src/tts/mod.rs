@@ -9,6 +9,8 @@ use std::thread::JoinHandle;
 
 use audio::{AudioClip, PlaybackSamples};
 
+use crate::settings::SharedVolume;
+
 // ── Public types ─────────────────────────────────────────────────────
 
 /// A request to synthesize speech.
@@ -78,7 +80,7 @@ pub struct TtsEngine {
 }
 
 impl TtsEngine {
-    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(atc_volume: Option<SharedVolume>) -> Result<Self, Box<dyn std::error::Error>> {
         // Check espeak-ng availability
         let has_espeak = Command::new("espeak-ng")
             .arg("--version")
@@ -132,7 +134,7 @@ impl TtsEngine {
         let assignments = Arc::new(build_assignments(voices.len()));
 
         // Audio player
-        let audio_player = audio::AudioPlayer::new()?;
+        let audio_player = audio::AudioPlayer::new(atc_volume)?;
         let clip_queue = audio_player.clip_queue();
         let output_sr = audio_player.output_sample_rate();
 

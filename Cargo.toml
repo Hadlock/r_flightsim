@@ -25,4 +25,5 @@ crossterm = "0.28"
 ort = "2.0.0-rc.9"
 cpal = "0.15"
 ureq = "3"
+rodio = { version = "0.19", default-features = false, features = ["flac", "wav"] }
 

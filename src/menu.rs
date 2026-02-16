@@ -39,10 +39,22 @@ pub struct MenuState {
     pending_load: Option<mpsc::Receiver<MeshData>>,
     pending_slug: String,
     loaded_slug: String,
+
+    // Settings sliders (0–100 integer percent, step 5)
+    pub settings_music_pct: u32,
+    pub settings_atc_pct: u32,
+    pub settings_engine_pct: u32,
+    pub settings_fetch_orbital: bool,
 }
 
 impl MenuState {
-    pub fn new(profiles: Vec<AircraftProfile>) -> Self {
+    pub fn new(
+        profiles: Vec<AircraftProfile>,
+        music_pct: u32,
+        atc_pct: u32,
+        engine_pct: u32,
+        fetch_orbital: bool,
+    ) -> Self {
         Self {
             profiles,
             selected_index: 0,
@@ -58,6 +70,10 @@ impl MenuState {
             pending_load: None,
             pending_slug: String::new(),
             loaded_slug: String::new(),
+            settings_music_pct: music_pct,
+            settings_atc_pct: atc_pct,
+            settings_engine_pct: engine_pct,
+            settings_fetch_orbital: fetch_orbital,
         }
     }
 
@@ -216,6 +232,7 @@ impl MenuState {
 
         match self.active_tab {
             MenuTab::PlaneSelect => self.draw_plane_select(ctx),
+            MenuTab::Settings => self.draw_settings(ctx),
             _ => self.draw_coming_soon(ctx),
         }
 
@@ -392,6 +409,86 @@ impl MenuState {
                     }
                 }
             });
+    }
+
+    fn draw_settings(&mut self, ctx: &egui::Context) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.add_space(24.0);
+            ui.heading(RichText::new("Audio").color(Color32::WHITE));
+            ui.add_space(12.0);
+
+            let slider_width = 300.0;
+
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new("Music Volume")
+                        .color(Color32::from_rgb(180, 195, 210)),
+                );
+                ui.add_space(16.0);
+                let mut val = self.settings_music_pct as f32;
+                let slider = egui::Slider::new(&mut val, 0.0..=100.0)
+                    .step_by(5.0)
+                    .suffix("%")
+                    .custom_formatter(|v, _| format!("{:.0}", v));
+                let response = ui.add_sized([slider_width, 20.0], slider);
+                if response.changed() {
+                    self.settings_music_pct = val as u32;
+                }
+            });
+
+            ui.add_space(8.0);
+
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new("ATC Voice Volume")
+                        .color(Color32::from_rgb(180, 195, 210)),
+                );
+                ui.add_space(16.0);
+                let mut val = self.settings_atc_pct as f32;
+                let slider = egui::Slider::new(&mut val, 0.0..=100.0)
+                    .step_by(5.0)
+                    .suffix("%")
+                    .custom_formatter(|v, _| format!("{:.0}", v));
+                let response = ui.add_sized([slider_width, 20.0], slider);
+                if response.changed() {
+                    self.settings_atc_pct = val as u32;
+                }
+            });
+
+            ui.add_space(8.0);
+
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new("Engine Volume")
+                        .color(Color32::from_rgb(180, 195, 210)),
+                );
+                ui.add_space(16.0);
+                let mut val = self.settings_engine_pct as f32;
+                let slider = egui::Slider::new(&mut val, 0.0..=100.0)
+                    .step_by(5.0)
+                    .suffix("%")
+                    .custom_formatter(|v, _| format!("{:.0}", v));
+                let response = ui.add_sized([slider_width, 20.0], slider);
+                if response.changed() {
+                    self.settings_engine_pct = val as u32;
+                }
+            });
+
+            ui.add_space(24.0);
+            ui.heading(RichText::new("Orbital").color(Color32::WHITE));
+            ui.add_space(12.0);
+
+            ui.checkbox(
+                &mut self.settings_fetch_orbital,
+                RichText::new("Fetch live orbital parameters")
+                    .color(Color32::from_rgb(180, 195, 210)),
+            );
+            ui.label(
+                RichText::new("When enabled, spacecraft profiles fetch live TLE data from CelesTrak for accurate orbital positions.")
+                    .color(Color32::from_rgb(120, 140, 160))
+                    .small(),
+            );
+        });
     }
 
     fn draw_coming_soon(&self, ctx: &egui::Context) {

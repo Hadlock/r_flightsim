@@ -4,6 +4,7 @@ country: "United States"
 year: 2015
 description: "Deep Space Climate Observatory at Sun-Earth L1 point, ~1.5 million km from Earth. Views the sunlit Earth."
 category: "Spacecraft"
+engine_sound: space
 
 model:
   obj: "../../obj_static/pyramid_giza.obj"

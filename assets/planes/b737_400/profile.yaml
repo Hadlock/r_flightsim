@@ -5,6 +5,7 @@ country: "United States"
 year: 1988
 description: "Stretched variant of the 737 Classic series, a short-to-medium-range narrow-body twinjet airliner."
 category: "Narrow-Body Airliner"
+engine_sound: jet-large
 
 model:
   obj: "model.obj"

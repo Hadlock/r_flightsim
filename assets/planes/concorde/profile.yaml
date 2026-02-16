@@ -5,6 +5,7 @@ country: "France/United Kingdom"
 year: 1969
 description: "Supersonic passenger airliner with a slender delta wing, capable of Mach 2.04 cruise. Retired in 2003."
 category: "Supersonic Airliner"
+engine_sound: jet-large
 
 model:
   obj: "model.obj"

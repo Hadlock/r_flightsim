@@ -5,6 +5,7 @@ country: "Canada"
 year: 1975
 description: "Four-engine STOL turboprop regional airliner, famous for its quiet operation and short-field performance."
 category: "Regional STOL Airliner"
+engine_sound: propeller-large
 
 model:
   obj: "model.obj"

@@ -5,6 +5,7 @@ country: "United States"
 year: 1986
 description: "Supersonic variable-sweep wing strategic bomber with blended wing-body design, capable of Mach 1.25 at altitude."
 category: "Strategic Bomber"
+engine_sound: jet-large
 
 model:
   obj: "model.obj"

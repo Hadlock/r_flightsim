@@ -1,6 +1,8 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use crate::settings::SharedVolume;
+
 /// Resampled PCM samples ready for playback at the output device rate.
 pub type PlaybackSamples = Vec<f32>;
 
@@ -17,7 +19,7 @@ pub struct AudioPlayer {
 }
 
 impl AudioPlayer {
-    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(vol_source: Option<SharedVolume>) -> Result<Self, Box<dyn std::error::Error>> {
         use cpal::traits::*;
 
         let host = cpal::default_host();
@@ -34,7 +36,6 @@ impl AudioPlayer {
         let queue_clone = clip_queue.clone();
 
         let gap_samples = (output_sample_rate as f32 * 0.3) as u32; // 300ms gap
-        let volume = 0.4f32;
 
         let config = supported_config.config();
 
@@ -46,6 +47,7 @@ impl AudioPlayer {
         let stream = device.build_output_stream(
             &config,
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                let volume = vol_source.as_ref().map_or(0.4, |v| v.get());
                 let mut idx = 0;
                 while idx < data.len() {
                     // Gap between clips

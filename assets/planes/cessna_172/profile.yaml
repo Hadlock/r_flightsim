@@ -5,6 +5,7 @@ country: "United States"
 year: 1956
 description: "The most produced aircraft in history, a high-wing single-engine piston trainer and utility aircraft."
 category: "General Aviation"
+engine_sound: propeller-small
 
 model:
   obj: "model.obj"

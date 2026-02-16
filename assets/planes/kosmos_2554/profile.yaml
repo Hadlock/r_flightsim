@@ -4,6 +4,7 @@ country: "Russia"
 year: 2020
 description: "Kosmos 2554 in Molniya orbit. Highly elliptical (500 km x 39,867 km) at 63.4 deg inclination. Starting at perigee."
 category: "Spacecraft"
+engine_sound: space
 
 model:
   obj: "../../obj_static/pyramid_giza.obj"
